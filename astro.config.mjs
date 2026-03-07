@@ -1,6 +1,7 @@
 import { defineConfig } from 'astro/config'
 import { fileURLToPath } from 'url'
 import node from '@astrojs/node'
+import vercel from '@astrojs/vercel'
 import compress from 'astro-compress'
 import icon from 'astro-icon'
 import mdx from '@astrojs/mdx'
@@ -39,7 +40,7 @@ const viteConfig = {
 // https://astro.build/config
 export default defineConfig({
   output: 'server',
-  adapter: node({ mode: 'standalone' }),
+  adapter: process.env.VERCEL ? vercel() : node({ mode: 'standalone' }),
   compressHTML: true,
   site: 'https://ibnurizalmutaqim.com',
   integrations: [compress(), icon(), mdx(), sitemap()],
