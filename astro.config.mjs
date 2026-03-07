@@ -42,7 +42,7 @@ export default defineConfig({
   output: 'server',
   adapter: process.env.VERCEL ? vercel() : node({ mode: 'standalone' }),
   compressHTML: true,
-  site: 'https://ibnurizalmutaqim.com',
+  site: 'https://ibnurizal-profil.vercel.app',
   integrations: [compress(), icon(), mdx(), sitemap()],
   vite: enhanceConfigForWorkspace(viteConfig),
 })
