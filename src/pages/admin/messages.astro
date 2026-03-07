@@ -1,0 +1,519 @@
+---
+import themeConfig from '@theme-config'
+import AdminSectionNav from '@components/admin/AdminSectionNav.astro'
+import MessagesAdminScript from '@components/admin/scripts/MessagesAdminScript.astro'
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL ?? ''
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
+const rawAdminIdleTimeoutMinutes = Number.parseInt(import.meta.env.PUBLIC_ADMIN_IDLE_TIMEOUT_MINUTES ?? '20', 10)
+const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
+  ? Math.min(30, Math.max(15, rawAdminIdleTimeoutMinutes))
+  : 20
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Admin - Contact Messages</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style
+      is:global
+      define:vars={{
+        brandPrimary: themeConfig.colors.primary,
+        brandSecondary: themeConfig.colors.secondary,
+        brandNeutral: themeConfig.colors.neutral,
+        brandOutline: themeConfig.colors.outline,
+      }}
+    >
+      :root {
+        color-scheme: light dark;
+        --brand-primary: var(--brandPrimary);
+        --brand-secondary: var(--brandSecondary);
+        --brand-neutral: var(--brandNeutral);
+        --brand-outline: var(--brandOutline);
+        --text-color: light-dark(#1f2530, #f8f9fc);
+        --surface: light-dark(rgba(255, 255, 255, 0.8), rgba(20, 24, 30, 0.9));
+        --surface-soft: light-dark(rgba(247, 250, 253, 0.88), rgba(32, 37, 44, 0.9));
+        --border-soft: light-dark(rgba(31, 37, 48, 0.14), rgba(244, 247, 250, 0.15));
+        --status-info: #2f6fd8;
+        --status-success: #16803d;
+        --status-error: #b42318;
+        --shadow-lg: 0 24px 54px rgba(7, 12, 18, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 0% -12%,
+            color-mix(in oklab, var(--brand-primary) 34%, transparent),
+            transparent 38%
+          ),
+          radial-gradient(
+            circle at 100% -8%,
+            color-mix(in oklab, var(--brand-secondary) 28%, transparent),
+            transparent 35%
+          ),
+          linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
+        min-height: 100vh;
+        color: var(--text-color);
+        line-height: 1.55;
+        font-family:
+          Atkinson Hyperlegible,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+
+      body::before {
+        position: fixed;
+        opacity: 0.23;
+        inset: 0;
+        background-image:
+          linear-gradient(to right, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px),
+          linear-gradient(to bottom, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px);
+        background-size: 24px 24px;
+        pointer-events: none;
+        content: '';
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .admin-shell {
+        position: relative;
+        margin-inline: auto;
+        padding: clamp(1rem, 2.8vw, 2rem);
+        max-width: 1320px;
+      }
+
+      .panel {
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-soft);
+        border-radius: 20px;
+        background: var(--surface);
+      }
+
+      .admin-header {
+        display: grid;
+        gap: 1rem;
+        padding: clamp(1rem, 2.6vw, 1.5rem);
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: color-mix(in oklab, var(--text-color) 70%, transparent);
+        font-weight: 700;
+        font-size: 0.82rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin-top: 0.35rem;
+        font-size: clamp(1.55rem, 3.6vw, 2.3rem);
+        line-height: 1.15;
+      }
+
+      .lead {
+        margin-top: 0.38rem;
+        max-width: 60ch;
+        color: color-mix(in oklab, var(--text-color) 78%, transparent);
+      }
+
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+
+      .link-chip,
+      .button {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.35rem;
+        transition:
+          transform 140ms ease,
+          box-shadow 200ms ease,
+          border-color 160ms ease,
+          background-color 160ms ease;
+        cursor: pointer;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
+        padding: 0.62rem 0.85rem;
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .button.small {
+        padding: 0.45rem 0.72rem;
+        font-size: 0.92rem;
+      }
+
+      .button.ghost {
+        background: color-mix(in oklab, var(--surface-soft) 70%, transparent);
+      }
+
+      .link-chip:hover,
+      .button:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in oklab, var(--brand-primary) 36%, var(--border-soft));
+        background: color-mix(in oklab, var(--surface-soft) 62%, var(--brand-primary) 16%);
+      }
+
+      .button:focus-visible,
+      .link-chip:focus-visible,
+      input:focus-visible {
+        outline: 2px solid transparent;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand-outline) 28%, transparent);
+      }
+
+      .button[disabled] {
+        transform: none;
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .admin-section-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin: 1rem 0;
+        padding: clamp(0.8rem, 2vw, 1rem);
+      }
+
+      .nav-link.is-active {
+        border-color: color-mix(in oklab, var(--brand-primary) 45%, var(--border-soft));
+        background: linear-gradient(
+          145deg,
+          color-mix(in oklab, var(--brand-primary) 22%, var(--surface-soft)),
+          color-mix(in oklab, var(--brand-secondary) 14%, var(--surface-soft))
+        );
+      }
+
+      .status {
+        margin: 1rem 0;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 88%, transparent);
+        padding: 0.72rem 0.85rem;
+      }
+
+      .status.info {
+        border-color: color-mix(in oklab, var(--status-info) 52%, var(--border-soft));
+      }
+
+      .status.success {
+        border-color: color-mix(in oklab, var(--status-success) 52%, var(--border-soft));
+      }
+
+      .status.error {
+        border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
+      }
+
+      .workspace {
+        display: grid;
+      }
+
+      .list-panel {
+        padding: clamp(1rem, 2.4vw, 1.35rem);
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.8rem;
+        margin-bottom: 0.95rem;
+      }
+
+      .panel-head p {
+        margin-top: 0.28rem;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.95rem;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+      }
+
+      .search-wrap {
+        position: relative;
+        min-width: min(100%, 260px);
+      }
+
+      .search-wrap input {
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
+        padding: 0.72rem 0.86rem 0.72rem 2rem;
+        width: 100%;
+        color: inherit;
+        font: inherit;
+      }
+
+      .search-wrap::before {
+        position: absolute;
+        inset-block-start: 0.62rem;
+        inset-inline-start: 0.74rem;
+        pointer-events: none;
+        content: '⌕';
+        color: color-mix(in oklab, var(--text-color) 68%, transparent);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.55rem;
+        margin-bottom: 0.9rem;
+      }
+
+      .metric {
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 76%, transparent);
+        padding: 0.62rem 0.68rem;
+      }
+
+      .metric p {
+        margin: 0;
+        color: color-mix(in oklab, var(--text-color) 72%, transparent);
+        font-size: 0.84rem;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 1.24rem;
+      }
+
+      .message-list {
+        display: grid;
+        gap: 0.7rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .message-item {
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: color-mix(in oklab, var(--surface-soft) 74%, transparent);
+        padding: 0.86rem;
+      }
+
+      .message-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.6rem;
+      }
+
+      .message-head h3 {
+        font-size: 1.02rem;
+      }
+
+      .message-meta {
+        margin-top: 0.25rem;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.88rem;
+        overflow-wrap: anywhere;
+      }
+
+      .message-body {
+        margin-top: 0.62rem;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .message-badges {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+      }
+
+      .badge {
+        border: 1px solid var(--border-soft);
+        border-radius: 999px;
+        background: color-mix(in oklab, var(--surface-soft) 72%, transparent);
+        padding: 0.2rem 0.55rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      .badge.unread {
+        border-color: color-mix(in oklab, #d97b00 45%, var(--border-soft));
+      }
+
+      .badge.read {
+        border-color: color-mix(in oklab, #16965b 45%, var(--border-soft));
+      }
+
+      .badge.reply-email {
+        border-color: color-mix(in oklab, #3a84e7 45%, var(--border-soft));
+      }
+
+      .badge.reply-whatsapp {
+        border-color: color-mix(in oklab, #0da8a1 45%, var(--border-soft));
+      }
+
+      .message-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.7rem;
+      }
+
+      .quick-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.6rem;
+      }
+
+      .quick-link {
+        border: 1px dashed var(--border-soft);
+        border-radius: 10px;
+        padding: 0.35rem 0.55rem;
+        color: inherit;
+        font-size: 0.86rem;
+        text-decoration: none;
+      }
+
+      .quick-link:hover {
+        border-color: color-mix(in oklab, var(--brand-secondary) 45%, var(--border-soft));
+      }
+
+      .empty-state {
+        border: 1px dashed var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 70%, transparent);
+        padding: 0.9rem;
+      }
+
+      .muted {
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+      }
+
+      @media (max-width: 860px) {
+        .panel-head,
+        .message-head {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .header-actions,
+        .toolbar,
+        .message-actions {
+          inline-size: 100%;
+        }
+
+        .header-actions .button,
+        .header-actions .link-chip,
+        .toolbar .button,
+        .message-actions .button {
+          flex: 1 1 150px;
+        }
+
+        .search-wrap {
+          min-width: 100%;
+          width: 100%;
+        }
+      }
+
+      @media (min-width: 1080px) {
+        .admin-header {
+          grid-template-columns: 1fr auto;
+          align-items: center;
+        }
+      }
+    </style>
+  </head>
+  <body
+    data-supabase-url={supabaseUrl}
+    data-supabase-anon-key={supabaseAnonKey}
+    data-admin-idle-timeout-minutes={adminIdleTimeoutMinutes}
+  >
+    <main class="admin-shell">
+      <header class="panel admin-header">
+        <div>
+          <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
+          <h1>Contact Messages</h1>
+          <p class="lead">Lihat pesan masuk dari halaman contact, tandai sudah dibaca, dan catat metode balasan (email/WhatsApp).</p>
+        </div>
+        <div class="header-actions">
+          <a class="link-chip" href="/">Preview website</a>
+          <button class="button ghost" id="logout-button" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <AdminSectionNav active="messages" />
+
+      <div class="status info" id="status" role="status" aria-live="polite">Initializing...</div>
+
+      <section class="workspace" id="app-section" hidden>
+        <section class="panel list-panel" aria-labelledby="messages-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="messages-title">Inbox Pesan Contact</h2>
+              <p>Data diambil real-time dari tabel <code>contact_messages</code>.</p>
+            </div>
+            <div class="toolbar">
+              <label class="search-wrap" for="search-input">
+                <span class="sr-only">Search messages</span>
+                <input id="search-input" type="search" placeholder="Search name, email, WhatsApp..." />
+              </label>
+              <button class="button" type="button" id="refresh-button">Refresh</button>
+            </div>
+          </div>
+
+          <div class="metrics" aria-live="polite">
+            <article class="metric">
+              <p>Total</p>
+              <strong id="metric-total">0</strong>
+            </article>
+            <article class="metric">
+              <p>Unread</p>
+              <strong id="metric-unread">0</strong>
+            </article>
+            <article class="metric">
+              <p>Replied via Email</p>
+              <strong id="metric-reply-email">0</strong>
+            </article>
+            <article class="metric">
+              <p>Replied via WhatsApp</p>
+              <strong id="metric-reply-whatsapp">0</strong>
+            </article>
+          </div>
+
+          <ul class="message-list" id="message-list"></ul>
+        </section>
+      </section>
+    </main>
+
+    <MessagesAdminScript />
+  </body>
+</html>
+
+
+

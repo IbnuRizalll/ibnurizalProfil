@@ -1,0 +1,373 @@
+---
+import '../styles/tailwind.css'
+import '../assets/scss/index.scss'
+import themeConfig from '@theme-config'
+import { SEO } from 'astro-seo'
+import Header from '@components/Header.astro'
+import Footer from '@components/Footer.astro'
+import { ClientRouter } from 'astro:transitions'
+import type { ImageMetadata } from 'astro'
+
+interface Props {
+  /**
+   * The title of the page
+   */
+  title?: string
+  /**
+   * The description of the page
+   */
+  description?: string
+  /**
+   * The URL of the page
+   */
+  url?: string | URL
+  /**
+   * The image path for social sharing (can be ImageMetadata or string path)
+   */
+  image?: ImageMetadata | string | null
+  /**
+   * The author of the page
+   */
+  author?: string
+  /**
+   * The type of content (default: 'website')
+   */
+  type?: 'website' | 'article'
+  /**
+   * Whether to use the title template (default: true)
+   * Set to false to use the title as-is without appending site name
+   */
+  useTitleTemplate?: boolean
+  /**
+   * The language of the page
+   */
+  lang?: string
+}
+
+const props = Astro.props as Props
+const siteBaseUrl = Astro.site ?? new URL(Astro.url.origin)
+const defaultPageUrl = new URL(Astro.url.pathname, siteBaseUrl).href
+
+function toAbsoluteUrl(value: string | URL): string {
+  const normalizedValue = typeof value === 'string' ? value.trim() : value.toString()
+
+  if (!normalizedValue) {
+    return defaultPageUrl
+  }
+
+  try {
+    return new URL(normalizedValue).href
+  } catch {
+    return new URL(normalizedValue, siteBaseUrl).href
+  }
+}
+
+const {
+  title = themeConfig.seo.title,
+  description = themeConfig.seo.description ?? '',
+  url = defaultPageUrl,
+  image = themeConfig.seo.image ?? null,
+  author = themeConfig.seo.author ?? '',
+  type = 'website',
+  useTitleTemplate = true,
+  lang = 'en',
+} = props
+
+// For social sharing, we need the full absolute URL
+// If image is an ImageMetadata object, use its src, otherwise treat as string path
+const imagePath = image ? (typeof image === 'string' ? image : image.src) : '/social-preview-image.png'
+const canonicalUrl = toAbsoluteUrl(url)
+const imageUrl = toAbsoluteUrl(imagePath)
+---
+
+<html lang={lang} dir="ltr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+
+    <!-- favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- theme colors from config -->
+    <style
+      define:vars={{
+        brandPrimary: themeConfig.colors.primary,
+        brandSecondary: themeConfig.colors.secondary,
+        brandNeutral: themeConfig.colors.neutral,
+        brandOutline: themeConfig.colors.outline,
+      }}
+    >
+      :global(:root) {
+        --brand-primary: var(--brandPrimary);
+        --brand-secondary: var(--brandSecondary);
+        --brand-neutral: var(--brandNeutral);
+        --brand-outline: var(--brandOutline);
+      }
+    </style>
+
+    <SEO
+      title={title}
+      titleTemplate={useTitleTemplate ? `%s - ${themeConfig.seo.title}` : undefined}
+      titleDefault={themeConfig.seo.title}
+      description={description}
+      canonical={canonicalUrl}
+      openGraph={{
+        basic: {
+          title: title,
+          type: type,
+          image: imageUrl,
+          url: canonicalUrl,
+        },
+        optional: {
+          description: description,
+        },
+      }}
+      twitter={{
+        card: 'summary_large_image',
+        title: title,
+        description: description,
+        image: imageUrl,
+      }}
+      extend={{
+        meta: [
+          {
+            name: 'author',
+            content: author,
+          },
+        ],
+      }}
+    />
+
+    <!-- Enable Astro View Transitions for all browsers -->
+    <ClientRouter />
+  </head>
+  <body>
+    <Header />
+    <main id="main-content" transition:animate="fade">
+      <slot />
+    </main>
+    <Footer />
+    <script>
+      declare global {
+        interface Window {
+          __scrollRevealCleanup?: (() => void) | undefined
+          __scrollRevealListenerBound?: boolean | undefined
+        }
+      }
+
+      const revealSelectors = [
+        '#main-content > *',
+        '#main-content .container > *',
+        '#main-content .space-content > *',
+        '#main-content .article-content > *',
+        '#main-content .post-grid > li',
+        '#main-content .portfolio-grid > li',
+        '#main-content .tag-cloud > *',
+        '#main-content .contact-grid > *',
+      ].join(', ')
+
+      const initScrollReveal = () => {
+        if (typeof window === 'undefined') return
+
+        if (typeof window.__scrollRevealCleanup === 'function') {
+          window.__scrollRevealCleanup()
+          window.__scrollRevealCleanup = undefined
+        }
+
+        const mainContent = document.querySelector<HTMLElement>('#main-content')
+        if (!(mainContent instanceof HTMLElement)) {
+          return
+        }
+
+        const rawCandidates = [...mainContent.querySelectorAll<HTMLElement>(revealSelectors)]
+
+        const uniqueCandidates: HTMLElement[] = []
+        const seen = new Set<HTMLElement>()
+
+        rawCandidates.forEach((element) => {
+          if (seen.has(element)) return
+          seen.add(element)
+          uniqueCandidates.push(element)
+        })
+
+        const candidates = uniqueCandidates.filter((element) => {
+          if (element.matches('script, style, noscript')) return false
+          if (element.dataset.scrollRevealIgnore === 'true') return false
+          if (element.closest('[data-scroll-reveal-disabled]')) return false
+          if (element.closest('[data-scroll-reveal-ignore]')) return false
+          if (element.getAttribute('aria-hidden') === 'true') return false
+          if (element.classList.contains('terminal-line') || element.classList.contains('terminal-space')) return false
+
+          const rect = element.getBoundingClientRect()
+          if (rect.width < 4 || rect.height < 4) return false
+          return true
+        })
+
+        const ancestorTargets = new Set<HTMLElement>()
+
+        candidates.forEach((element) => {
+          candidates.forEach((other) => {
+            if (element !== other && element.contains(other)) {
+              ancestorTargets.add(element)
+            }
+          })
+        })
+
+        const targets = candidates.filter((element) => !ancestorTargets.has(element))
+        if (targets.length === 0) {
+          document.body.classList.remove('scroll-reveal-enabled')
+          return
+        }
+
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+        const inViewportThreshold = viewportHeight * 0.88
+
+        targets.forEach((element, index) => {
+          const rect = element.getBoundingClientRect()
+          const isInitiallyVisible = rect.top < inViewportThreshold && rect.bottom > 0
+          element.setAttribute('data-scroll-reveal', '')
+          element.style.setProperty('--scroll-reveal-delay', `${Math.min(260, (index % 6) * 45)}ms`)
+          element.classList.toggle('is-scroll-reveal-visible', isInitiallyVisible)
+        })
+
+        document.body.classList.add('scroll-reveal-enabled')
+
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        if (prefersReducedMotion || typeof IntersectionObserver === 'undefined') {
+          targets.forEach((element) => {
+            element.classList.add('is-scroll-reveal-visible')
+          })
+
+          window.__scrollRevealCleanup = () => {
+            targets.forEach((element) => {
+              element.removeAttribute('data-scroll-reveal')
+              element.classList.remove('is-scroll-reveal-visible')
+              element.style.removeProperty('--scroll-reveal-delay')
+            })
+            document.body.classList.remove('scroll-reveal-enabled')
+          }
+          return
+        }
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              entry.target.classList.toggle('is-scroll-reveal-visible', entry.isIntersecting)
+            })
+          },
+          {
+            threshold: 0.18,
+            rootMargin: '0px 0px -8% 0px',
+          },
+        )
+
+        targets.forEach((element) => observer.observe(element))
+
+        window.__scrollRevealCleanup = () => {
+          observer.disconnect()
+          targets.forEach((element) => {
+            element.removeAttribute('data-scroll-reveal')
+            element.classList.remove('is-scroll-reveal-visible')
+            element.style.removeProperty('--scroll-reveal-delay')
+          })
+          document.body.classList.remove('scroll-reveal-enabled')
+        }
+      }
+
+      initScrollReveal()
+
+      if (!window.__scrollRevealListenerBound) {
+        document.addEventListener('astro:page-load', initScrollReveal)
+        window.__scrollRevealListenerBound = true
+      }
+    </script>
+    <style lang="scss" is:global>
+      @use '../assets/scss/base/mixins' as *;
+
+      // sticky footer on low content pages
+      html,
+      body {
+        height: 100%;
+      }
+
+      body {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        overflow-x: clip;
+        background:
+          radial-gradient(
+            circle at 0% -12%,
+            color-mix(in oklab, var(--brand-primary) 34%, transparent),
+            transparent 38%
+          ),
+          radial-gradient(
+            circle at 100% -8%,
+            color-mix(in oklab, var(--brand-secondary) 28%, transparent),
+            transparent 35%
+          ),
+          linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
+
+        main {
+          flex: 1 0 auto;
+          padding-top: calc(var(--site-header-offset, 6.5rem) + env(safe-area-inset-top));
+        }
+
+        footer {
+          flex-shrink: 0;
+        }
+      }
+
+      body::before {
+        position: fixed;
+        opacity: 0.22;
+        inset: 0;
+        background-image:
+          linear-gradient(to right, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px),
+          linear-gradient(to bottom, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px);
+        background-size: 24px 24px;
+        pointer-events: none;
+        content: '';
+      }
+
+      pre {
+        border: 2px solid var(--link-color);
+        border-radius: 0.35rem;
+        padding: 1rem;
+      }
+
+      .card {
+        a {
+          @include text-decoration(transparent, var(--foreground-color), 4px, 2px);
+        }
+      }
+
+      body.scroll-reveal-enabled [data-scroll-reveal] {
+        opacity: 0;
+        transform: translate3d(0, 18px, 0) scale(0.995);
+        filter: blur(2px);
+        transition:
+          opacity 430ms cubic-bezier(0.2, 0.72, 0.18, 1) var(--scroll-reveal-delay, 0ms),
+          transform 560ms cubic-bezier(0.2, 0.72, 0.18, 1) var(--scroll-reveal-delay, 0ms),
+          filter 560ms cubic-bezier(0.2, 0.72, 0.18, 1) var(--scroll-reveal-delay, 0ms);
+        will-change: opacity, transform, filter;
+      }
+
+      body.scroll-reveal-enabled [data-scroll-reveal].is-scroll-reveal-visible {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: blur(0);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body.scroll-reveal-enabled [data-scroll-reveal] {
+          opacity: 1 !important;
+          transform: none !important;
+          filter: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </body>
+</html>

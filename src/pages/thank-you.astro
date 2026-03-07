@@ -1,0 +1,22 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import { Link, Notification } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+---
+
+<DefaultLayout title="Terima Kasih">
+  <PageHeader title="Terima Kasih" subtitle="Pesanmu sudah berhasil terkirim." bgType="gradient" />
+  <section class="container my-16">
+    <div class="space-content">
+      <Notification type="info">
+        <Icon aria-hidden="true" name="lucide:info" size={24} />
+        <p>Saya sudah menerima pesanmu dan akan membalas secepatnya.</p>
+      </Notification>
+      <Link href="/contact" isButton type="primary" animateOnHover animationType="boop" pulse>
+        <Icon aria-hidden="true" name="lucide:mail" size={24} />
+        Send another message
+      </Link>
+    </div>
+  </section>
+</DefaultLayout>

@@ -1,0 +1,49 @@
+---
+import DefaultLayout from './DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+
+type PageType = 'website' | 'article'
+type PageHeaderBackground = 'primary' | 'secondary' | 'neutral' | 'gradient' | 'bordered'
+
+interface LayoutPageHeader {
+  title: string
+  subtitle?: string
+  bgType?: PageHeaderBackground
+}
+
+interface LayoutFrontmatter {
+  title?: string
+  description?: string
+  image?: string
+  author?: string
+  type?: PageType
+  useTitleTemplate?: boolean
+  narrow?: boolean
+  pageHeader?: LayoutPageHeader
+}
+
+interface Props {
+  frontmatter?: LayoutFrontmatter
+}
+
+const { frontmatter = {} } = Astro.props as Props
+const containerClass = frontmatter.narrow ? 'narrow container' : 'container'
+const pageHeader = frontmatter.pageHeader
+const pageHeaderTitle = pageHeader?.title?.trim()
+---
+
+<DefaultLayout
+  title={frontmatter.title}
+  description={frontmatter.description}
+  image={frontmatter.image}
+  author={frontmatter.author}
+  type={frontmatter.type}
+  useTitleTemplate={frontmatter.useTitleTemplate}
+>
+  {pageHeaderTitle && <PageHeader title={pageHeaderTitle} subtitle={pageHeader?.subtitle} bgType={pageHeader?.bgType} />}
+  <div class={containerClass}>
+    <div class="space-content my-12">
+      <slot />
+    </div>
+  </div>
+</DefaultLayout>

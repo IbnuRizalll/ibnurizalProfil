@@ -1,0 +1,249 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import { Input, Button, Textarea, Heading, Link } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+
+const githubHref = 'https://github.com/IbnuRizalll'
+const linkedinHref = 'https://www.linkedin.com/in/ibnu-rizal-370864295'
+const instagramHref = 'https://www.instagram.com/ibnrrmm/'
+---
+
+<DefaultLayout title="Kontak">
+  <PageHeader title="Kontak" subtitle="Terbuka untuk kolaborasi dan diskusi." bgType="gradient" />
+
+  <section class="my-12 md:my-16">
+    <div class="container">
+      <Heading level="h2">Hubungi Saya</Heading>
+    </div>
+  </section>
+
+  <section class="container">
+    <div id="contact-form-wrapper" class="contact-grid grid grid-cols-1 md:grid-cols-2">
+      <div class="space-content">
+        <form id="contact-form" class="form" name="contact" action="/thank-you" method="post" novalidate>
+          <div class="hp-field" aria-hidden="true">
+            <label for="website">Website</label>
+            <input id="website" name="website" type="text" autocomplete="off" tabindex="-1" />
+          </div>
+
+          <Input
+            name="fullname"
+            label="Nama"
+            required
+            data-validation="Silakan isi nama terlebih dahulu"
+            autocomplete="name"
+          />
+
+          <Input
+            name="email"
+            label="Email"
+            type="email"
+            required
+            data-validation="Masukkan email yang valid"
+            autocomplete="email"
+          />
+
+          <Input
+            name="phone"
+            label="WhatsApp Number"
+            type="tel"
+            required
+            data-validation="Masukkan nomor WhatsApp aktif"
+            autocomplete="tel"
+            placeholder="Contoh: +6281234567890"
+          />
+
+          <Textarea
+            name="message"
+            label="Pesan"
+            required
+            data-validation="Ceritakan kebutuhanmu secara singkat"
+            placeholder="Contoh: Saya ingin membuat website company profile untuk bisnis saya."
+          />
+
+          <Button htmlType="submit" type="primary">Send Message</Button>
+          <p id="contact-form-status" class="form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+
+      <div class="space-content">
+        <Heading level="h3">Let's connect on social media</Heading>
+        <div class="gap-2xs flex items-center">
+          <Icon aria-hidden="true" name="lucide:github" size={20} class="flex-shrink-0" />
+          <p>
+            <span class="font-bold">GitHub:</span>
+            <Link href={githubHref} isExternal>github.com/IbnuRizalll</Link>
+          </p>
+        </div>
+
+        <div class="gap-2xs flex items-center">
+          <Icon aria-hidden="true" name="lucide:linkedin" size={20} class="flex-shrink-0" />
+          <p>
+            <span class="font-bold">LinkedIn:</span>
+            <Link href={linkedinHref} isExternal>ibnu-rizal-370864295</Link>
+          </p>
+        </div>
+
+        <div class="gap-2xs flex items-center">
+          <Icon aria-hidden="true" name="lucide:instagram" size={20} class="flex-shrink-0" />
+          <p>
+            <span class="font-bold">Instagram:</span>
+            <Link href={instagramHref} isExternal>@ibnrrmm</Link>
+          </p>
+        </div>
+
+        <p class="text-sm">Biasanya pesan dibalas dalam 1 x 24 jam pada hari kerja. Terima kasih sudah berkunjung.</p>
+      </div>
+    </div>
+  </section>
+</DefaultLayout>
+
+<script type="module" is:inline>
+  const wrapper = document.getElementById('contact-form-wrapper')
+  const form = document.getElementById('contact-form')
+  const statusEl = document.getElementById('contact-form-status')
+
+  if (wrapper instanceof HTMLElement && form instanceof HTMLFormElement && statusEl instanceof HTMLElement) {
+    const submitButton = form.querySelector('button[type="submit"]')
+
+    const setStatus = (message, type = 'info') => {
+      statusEl.textContent = message
+      statusEl.className = `form-status ${type}`
+    }
+
+    const getCookieValue = (name) => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const matcher = new RegExp(`(?:^|;\\s*)${escaped}=([^;]*)`)
+      const match = document.cookie.match(matcher)
+      return match ? decodeURIComponent(match[1]) : ''
+    }
+
+    const normalizeWhatsappNumber = (value) => {
+      const digitsOnly = String(value).replace(/\D/g, '')
+      if (!digitsOnly) return ''
+      if (digitsOnly.startsWith('0')) return `+62${digitsOnly.slice(1)}`
+      if (digitsOnly.startsWith('62')) return `+${digitsOnly}`
+      return `+${digitsOnly}`
+    }
+
+    const isValidWhatsappNumber = (value) => /^\+62\d{8,13}$/.test(value)
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault()
+
+      const formData = new FormData(form)
+      const fullName = String(formData.get('fullname') ?? '').trim()
+      const email = String(formData.get('email') ?? '').trim()
+      const whatsappNumberRaw = String(formData.get('phone') ?? '').trim()
+      const whatsappNumber = normalizeWhatsappNumber(whatsappNumberRaw)
+      const message = String(formData.get('message') ?? '').trim()
+      const website = String(formData.get('website') ?? '').trim()
+
+      if (!fullName || !email || !whatsappNumber || !message) {
+        setStatus('Mohon lengkapi nama, email, WhatsApp number, dan pesan.', 'error')
+        return
+      }
+
+      if (!isValidWhatsappNumber(whatsappNumber)) {
+        setStatus('Format WhatsApp tidak valid. Gunakan format +628xxxxxxxxxx.', 'error')
+        return
+      }
+
+      if (submitButton instanceof HTMLButtonElement) {
+        submitButton.disabled = true
+      }
+      setStatus('Mengirim pesan...', 'info')
+
+      try {
+        const csrfToken = getCookieValue('csrf_token')
+        const response = await fetch('/api/contact-messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+          },
+          body: JSON.stringify({
+            full_name: fullName,
+            email,
+            phone: whatsappNumber,
+            message,
+            website,
+            is_read: false,
+          }),
+        })
+
+        let responseBody = null
+
+        if (!response.ok) {
+          try {
+            responseBody = await response.json()
+          } catch {
+            responseBody = null
+          }
+
+          const apiMessage = responseBody && typeof responseBody.error === 'string' ? responseBody.error.trim() : ''
+          const publicMessage =
+            apiMessage.length > 0 && response.status < 500
+              ? apiMessage
+              : 'Pesan belum dapat dikirim saat ini. Silakan coba kembali beberapa saat lagi.'
+
+          setStatus(publicMessage, 'error')
+          return
+        }
+
+        setStatus('Pesan berhasil dikirim.', 'success')
+        form.reset()
+        window.location.href = '/thank-you'
+      } catch (error) {
+        setStatus('Terjadi kendala koneksi. Silakan coba lagi beberapa saat lagi.', 'error')
+      } finally {
+        if (submitButton instanceof HTMLButtonElement) {
+          submitButton.disabled = false
+        }
+      }
+    })
+  }
+</script>
+
+<style lang="scss" is:global>
+  .contact-grid {
+    gap: clamp(1rem, 5vw, 3rem);
+  }
+
+  .contact-grid .hp-field {
+    position: absolute;
+    left: -9999px;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .contact-grid p {
+    overflow-wrap: anywhere;
+  }
+
+  .contact-grid .space-content > * + * {
+    margin-block-start: var(--space-s);
+  }
+
+  .contact-grid .form-status {
+    margin-top: 0.65rem;
+    min-height: 1.2rem;
+    font-size: 0.9rem;
+  }
+
+  .contact-grid .form-status.info {
+    color: color-mix(in oklab, var(--color-primary-400) 72%, var(--foreground-color));
+  }
+
+  .contact-grid .form-status.success {
+    color: color-mix(in oklab, #1aa35f 75%, var(--foreground-color));
+  }
+
+  .contact-grid .form-status.error {
+    color: color-mix(in oklab, #d33c3c 80%, var(--foreground-color));
+  }
+</style>

@@ -1,0 +1,52 @@
+---
+import { Link } from 'accessible-astro-components'
+const logoText = 'IRM'
+---
+
+<Link href="/" class="logo-link" title={logoText} aria-label="Home">
+  <span class="logo-badge" aria-hidden="true">{logoText}</span>
+  <span class="logo-meta">
+    <span class="logo-name">Ibnu Rizal Mutaqim</span>
+  </span>
+</Link>
+
+<style lang="scss" is:global>
+  .logo-link {
+    display: inline-flex;
+    align-items: center;
+    gap: clamp(0.45rem, 1.2vw, 0.65rem);
+    color: var(--foreground-color);
+    line-height: 1;
+    text-decoration: none;
+  }
+
+  .logo-link .logo-badge {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 82%, transparent);
+    border-radius: 0.78rem;
+    background: color-mix(in oklab, var(--background-color) 88%, var(--color-primary-100));
+    padding: 0.45rem 0.72rem;
+    font-size: clamp(1rem, 0.95rem + 0.24vw, 1.15rem);
+    font-weight: 800;
+    letter-spacing: 0.14em;
+  }
+
+  .logo-link .logo-meta {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .logo-link .logo-name {
+    font-size: clamp(0.98rem, 0.92rem + 0.2vw, 1.08rem);
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  @media (max-width: 880px) {
+    .logo-link .logo-meta {
+      display: none;
+    }
+  }
+</style>

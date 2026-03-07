@@ -1,0 +1,521 @@
+﻿---
+interface Props {
+  content: string
+  commandLabel?: string
+}
+
+const { content, commandLabel = './about_me' }: Props = Astro.props
+
+const normalizedContent = (content ?? '').trim()
+const fallbackContent =
+  'Ringkasan profil sedang diperbarui. Silakan kembali lagi nanti untuk melihat versi terbarunya.'
+const lines = (normalizedContent || fallbackContent).split('\n')
+---
+
+<article class="about-terminal" aria-label="Biografi" data-about-terminal>
+  <div class="terminal-shell">
+    <div class="terminal-orbit" aria-hidden="true">
+      <svg class="orbit-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <path data-orbit-track class="orbit-track" d="M 0 0" />
+        <path data-orbit-glow class="orbit-path-glow" d="M 0 0" />
+        <path
+          data-orbit-path
+          class="orbit-path"
+          d="M 0 0"
+        />
+        <circle class="car" cx="0" cy="0" r="1.7" />
+      </svg>
+    </div>
+
+    <header class="terminal-head">
+      <div class="terminal-controls" aria-hidden="true">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+      </div>
+      <p class="terminal-path">root@ibnu:~/{commandLabel.replace('./', '')}</p>
+    </header>
+
+    <div class="terminal-body">
+      <p class="terminal-command" data-terminal-command>
+        <span aria-hidden="true">$</span>
+        <span class="terminal-command-text" data-command-label data-command-full={commandLabel}>{commandLabel}</span>
+        <span class="terminal-cursor" aria-hidden="true"></span>
+      </p>
+
+      {
+        lines.map((line, index) =>
+          line.trim().length === 0 ? (
+            <div class="terminal-space" style={`--line-index:${index};`} aria-hidden="true" />
+          ) : (
+            <p class="terminal-line" style={`--line-index:${index};`}>
+              {line}
+            </p>
+          ),
+        )
+      }
+    </div>
+  </div>
+</article>
+
+<script>
+  import { animate, svg } from 'animejs'
+
+  declare global {
+    interface Window {
+      __aboutTerminalMotionCleanup?: (() => void) | undefined
+    }
+  }
+
+  const createRoundedRectPath = (width: number, height: number, radius: number, inset = 1.5): string => {
+    const left = inset
+    const top = inset
+    const right = Math.max(left, width - inset)
+    const bottom = Math.max(top, height - inset)
+    const r = Math.max(0, Math.min(radius, (right - left) / 2, (bottom - top) / 2))
+
+    return [
+      `M ${left + r} ${top}`,
+      `H ${right - r}`,
+      `A ${r} ${r} 0 0 1 ${right} ${top + r}`,
+      `V ${bottom - r}`,
+      `A ${r} ${r} 0 0 1 ${right - r} ${bottom}`,
+      `H ${left + r}`,
+      `A ${r} ${r} 0 0 1 ${left} ${bottom - r}`,
+      `V ${top + r}`,
+      `A ${r} ${r} 0 0 1 ${left + r} ${top}`,
+      'Z',
+    ].join(' ')
+  }
+
+  const initAboutTerminalMotion = () => {
+    if (typeof window === 'undefined') return
+
+    if (typeof window.__aboutTerminalMotionCleanup === 'function') {
+      window.__aboutTerminalMotionCleanup()
+      window.__aboutTerminalMotionCleanup = undefined
+    }
+
+    const cards = [...document.querySelectorAll<HTMLElement>('[data-about-terminal]')]
+    if (cards.length === 0) return
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    const animations: Array<{ pause?: () => void }> = []
+    const observers: ResizeObserver[] = []
+    const frameIds: number[] = []
+
+    cards.forEach((card) => {
+      const commandLabel = card.querySelector<HTMLElement>('[data-command-label]')
+      if (!(commandLabel instanceof HTMLElement)) return
+
+      const fullCommand = commandLabel.dataset.commandFull ?? commandLabel.textContent ?? ''
+      commandLabel.textContent = fullCommand
+
+      if (prefersReducedMotion) return
+
+      let charIndex = 0
+      let direction: 1 | -1 = 1
+      let lastTick = 0
+      let holdUntil = 0
+      const typeStepMs = 70
+      const holdFullMs = 1300
+      const holdEmptyMs = 420
+
+      const stepTyping = (timestamp: number) => {
+        if (holdUntil > 0 && timestamp < holdUntil) {
+          const rafId = window.requestAnimationFrame(stepTyping)
+          frameIds.push(rafId)
+          return
+        }
+
+        if (!lastTick) {
+          lastTick = timestamp
+        }
+
+        if (timestamp - lastTick >= typeStepMs) {
+          lastTick = timestamp
+
+          if (direction === 1) {
+            charIndex = Math.min(fullCommand.length, charIndex + 1)
+            if (charIndex === fullCommand.length) {
+              direction = -1
+              holdUntil = timestamp + holdFullMs
+            }
+          } else {
+            charIndex = Math.max(0, charIndex - 1)
+            if (charIndex === 0) {
+              direction = 1
+              holdUntil = timestamp + holdEmptyMs
+            }
+          }
+
+          commandLabel.textContent = fullCommand.slice(0, charIndex)
+        }
+
+        const rafId = window.requestAnimationFrame(stepTyping)
+        frameIds.push(rafId)
+      }
+
+      const initialRaf = window.requestAnimationFrame(stepTyping)
+      frameIds.push(initialRaf)
+    })
+
+    if (prefersReducedMotion) {
+      return
+    }
+
+    cards.forEach((card) => {
+      const svgEl = card.querySelector('.orbit-svg')
+      const track = card.querySelector('[data-orbit-track]')
+      const glow = card.querySelector('[data-orbit-glow]')
+      const path = card.querySelector('[data-orbit-path]')
+      const car = card.querySelector('.car')
+
+      if (
+        !(svgEl instanceof SVGElement) ||
+        !(track instanceof SVGPathElement) ||
+        !(glow instanceof SVGPathElement) ||
+        !(path instanceof SVGPathElement) ||
+        !(car instanceof SVGElement)
+      ) {
+        return
+      }
+
+      const runAnimations = () => {
+        const rect = card.getBoundingClientRect()
+        const width = Math.max(24, Math.round(rect.width))
+        const height = Math.max(24, Math.round(rect.height))
+        const borderRadius = Number.parseFloat(window.getComputedStyle(card).borderTopLeftRadius) || 20
+        const orbitPath = createRoundedRectPath(width, height, borderRadius)
+
+        svgEl.setAttribute('viewBox', `0 0 ${width} ${height}`)
+        track.setAttribute('d', orbitPath)
+        glow.setAttribute('d', orbitPath)
+        path.setAttribute('d', orbitPath)
+        car.setAttribute('cx', String(borderRadius + 1.5))
+        car.setAttribute('cy', '1.5')
+
+        const glowDrawable = svg.createDrawable(glow)
+        const motionPath = svg.createMotionPath(path)
+        const drawable = svg.createDrawable(path)
+
+        animations.push(
+          animate(car, {
+            ease: 'linear',
+            duration: 5000,
+            loop: true,
+            ...motionPath,
+          }),
+        )
+
+        animations.push(
+          animate(glowDrawable, {
+            draw: ['0 0.28', '1 1.28'],
+            ease: 'linear',
+            duration: 5000,
+            loop: true,
+          }),
+        )
+
+        animations.push(
+          animate(drawable, {
+            draw: ['0 0.18', '1 1.18'],
+            ease: 'linear',
+            duration: 5000,
+            loop: true,
+          }),
+        )
+      }
+
+      runAnimations()
+
+      const resizeObserver = new ResizeObserver(() => {
+        // Rebuild motion path when card dimensions change.
+        animations.forEach((instance) => {
+          if (typeof instance.pause === 'function') {
+            instance.pause()
+          }
+        })
+        animations.length = 0
+        runAnimations()
+      })
+
+      resizeObserver.observe(card)
+      observers.push(resizeObserver)
+    })
+
+    if (animations.length === 0) return
+
+    window.__aboutTerminalMotionCleanup = () => {
+      animations.forEach((instance) => {
+        if (typeof instance.pause === 'function') {
+          instance.pause()
+        }
+      })
+      observers.forEach((observer) => observer.disconnect())
+      frameIds.forEach((frameId) => window.cancelAnimationFrame(frameId))
+    }
+  }
+
+  initAboutTerminalMotion()
+  document.addEventListener('astro:page-load', initAboutTerminalMotion)
+</script>
+
+<style lang="scss">
+  .about-terminal {
+    --about-radius: clamp(14px, 2.4vw, 24px);
+
+    position: relative;
+    margin-inline: auto;
+    box-shadow: 0 16px 42px rgba(2, 6, 12, 0.58);
+    border: 1px solid color-mix(in oklab, #1f2937 76%, transparent);
+    border-radius: var(--about-radius);
+    background: linear-gradient(180deg, #0a0f14, #06090d);
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .terminal-shell {
+    position: relative;
+    border-radius: var(--about-radius);
+    background: linear-gradient(180deg, #090d12, #05070a 70%);
+  }
+
+  .terminal-head,
+  .terminal-body {
+    position: relative;
+    z-index: 2;
+  }
+
+  .terminal-orbit {
+    position: absolute;
+    z-index: 3;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .orbit-svg {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .orbit-track {
+    fill: none;
+    stroke: color-mix(in oklab, #22c55e 30%, transparent);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .orbit-path {
+    fill: none;
+    stroke: color-mix(in oklab, #22c55e 80%, transparent);
+    stroke-width: 1.2;
+    vector-effect: non-scaling-stroke;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .orbit-path-glow {
+    fill: none;
+    stroke: color-mix(in oklab, #86efac 88%, transparent);
+    stroke-width: 2.8;
+    opacity: 0.64;
+    vector-effect: non-scaling-stroke;
+    filter: blur(1.8px) drop-shadow(0 0 8px rgba(134, 239, 172, 0.72));
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .car {
+    fill: #86efac;
+    stroke: rgba(2, 6, 12, 0.85);
+    stroke-width: 0.35;
+    filter: drop-shadow(0 0 6px rgba(134, 239, 172, 0.7));
+    animation: car-pulse 980ms ease-in-out infinite;
+  }
+
+  .terminal-shell::before {
+    position: absolute;
+    opacity: 0.22;
+    inset: 0;
+    background-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 18px,
+      rgba(34, 197, 94, 0.12) 19px
+    );
+    background-size: 100% 20px;
+    pointer-events: none;
+    content: '';
+  }
+
+  .terminal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--space-s);
+    border-bottom: 1px solid rgba(51, 65, 85, 0.68);
+    background: linear-gradient(180deg, rgba(20, 26, 35, 0.92), rgba(12, 17, 23, 0.92));
+    padding: clamp(0.62rem, 1.8vw, 0.78rem) clamp(0.75rem, 2.2vw, 1rem);
+  }
+
+  .terminal-controls {
+    display: inline-flex;
+    gap: 0.42rem;
+  }
+
+  .dot {
+    border-radius: 999px;
+    inline-size: 0.7rem;
+    block-size: 0.7rem;
+  }
+
+  .dot:nth-child(1) {
+    background: #ff5f56;
+  }
+
+  .dot:nth-child(2) {
+    background: #ffbd2e;
+  }
+
+  .dot:nth-child(3) {
+    background: #27c93f;
+  }
+
+  .terminal-path {
+    margin: 0;
+    color: #9ca3af;
+    font:
+      600 clamp(0.72rem, 1.55vw, 0.86rem) / 1.2 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      Liberation Mono,
+      monospace;
+    overflow-wrap: anywhere;
+  }
+
+  .terminal-body {
+    background: linear-gradient(180deg, rgba(5, 9, 14, 0.72), rgba(4, 8, 13, 0.92));
+    padding: clamp(0.8rem, 2.4vw, 1.4rem);
+  }
+
+  .terminal-command {
+    display: inline-flex;
+    gap: 0.6rem;
+    margin: 0 0 0.75rem;
+    color: #86efac;
+    font:
+      700 clamp(0.92rem, 2vw, 1rem) / 1.4 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      Liberation Mono,
+      monospace;
+  }
+
+  .terminal-command-text {
+    min-inline-size: 0.2ch;
+  }
+
+  .terminal-cursor {
+    margin-left: 0.1rem;
+    animation: terminal-cursor-blink 920ms step-end infinite;
+  }
+
+  .terminal-cursor::before {
+    content: '|';
+  }
+
+  .terminal-line,
+  .terminal-space {
+    transform: translateY(6px);
+    opacity: 0;
+    animation: line-in 520ms cubic-bezier(0.18, 0.74, 0.22, 1) both;
+    animation-delay: calc(var(--line-index, 0) * 70ms);
+  }
+
+  .terminal-line {
+    margin: 0;
+    color: #e5e7eb;
+    font:
+      500 clamp(0.88rem, 1.85vw, 1.05rem) / 1.72 ui-monospace,
+      SFMono-Regular,
+      Menlo,
+      Monaco,
+      Consolas,
+      Liberation Mono,
+      monospace;
+    text-wrap: pretty;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .terminal-space {
+    block-size: 0.95rem;
+  }
+
+  @keyframes line-in {
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes car-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.22);
+    }
+  }
+
+  @keyframes terminal-cursor-blink {
+    0%,
+    48% {
+      opacity: 1;
+    }
+
+    49%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .terminal-head {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.52rem;
+    }
+
+    .terminal-path {
+      font-size: 0.76rem;
+    }
+
+    .terminal-line {
+      line-height: 1.65;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .about-terminal,
+    .terminal-line,
+    .terminal-space,
+    .car,
+    .terminal-cursor {
+      animation: none !important;
+    }
+
+  }
+</style>
+

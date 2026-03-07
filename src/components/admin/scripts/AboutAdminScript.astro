@@ -1,0 +1,738 @@
+    <script type="module" is:inline>
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+
+      const body = document.body
+      const statusEl = document.getElementById('status')
+      const appSection = document.getElementById('app-section')
+      const logoutButton = document.getElementById('logout-button')
+      const settingsForm = document.getElementById('settings-form')
+      const settingsSaveButton = document.getElementById('settings-save-button')
+      const settingsResetButton = document.getElementById('settings-reset-button')
+      const settingsDeleteButton = document.getElementById('settings-delete-button')
+      const settingsHeroCount = document.getElementById('settings-hero-count')
+      const settingsAboutCount = document.getElementById('settings-about-count')
+      const settingsLogoFileInput = document.getElementById('settings-logo-file')
+      const settingsHomeImageFileInput = document.getElementById('settings-home-image-file')
+      const settingsLogoPreview = document.getElementById('settings-logo-preview')
+      const settingsHomeImagePreview = document.getElementById('settings-home-image-preview')
+
+      const settingsFields = {
+        logoUrl: document.getElementById('settings-logo-url'),
+        homeImageUrl: document.getElementById('settings-home-image-url'),
+        heroDescription: document.getElementById('settings-hero-description'),
+        aboutMe: document.getElementById('settings-about-me'),
+      }
+
+      const SETTINGS_ROW_ID = 'main'
+      const SITE_ASSETS_BUCKET = body.dataset.supabaseAssetsBucket || 'site-assets'
+      const ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT = 20
+      const ADMIN_IDLE_TIMEOUT_MINUTES_MIN = 15
+      const ADMIN_IDLE_TIMEOUT_MINUTES_MAX = 30
+      const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
+      const ADMIN_ACTIVITY_THROTTLE_MS = 5000
+      const MAX_ASSET_INPUT_BYTES = 20 * 1024 * 1024
+      const MAX_ASSET_UPLOAD_BYTES = 2 * 1024 * 1024
+      const IMAGE_COMPRESS_MIN_RATIO = 0.96
+      const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+      const IMAGE_COMPRESSION_PLANS = [
+        { mime: 'image/webp', maxWidth: 1920, maxHeight: 1920, quality: 0.82 },
+        { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.74 },
+        { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
+        { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
+        { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
+        { mime: 'image/jpeg', maxWidth: 1024, maxHeight: 1024, quality: 0.6 },
+        { mime: 'image/jpeg', maxWidth: 800, maxHeight: 800, quality: 0.54 },
+      ]
+      const defaultSettings = {
+        id: SETTINGS_ROW_ID,
+        logo_url: '',
+        home_image_url: '/astronaut-hero-img.webp',
+        hero_description:
+          'Saya Ibnu Rizal Mutaqim, seorang developer yang berfokus membangun website cepat, rapi, dan mudah dikelola.',
+        about_me:
+          'Saya fokus pada pengembangan web modern yang cepat, accessible, dan mudah dipelihara. Saya terbiasa mengerjakan antarmuka, integrasi API, serta optimasi performa agar produk digital siap dipakai di dunia nyata.',
+      }
+
+      let supabase
+      let accessToken = ''
+      let currentSiteSettings = null
+      let idleTimeoutTimer = 0
+      let lastActivityAt = 0
+      let isSigningOutForTimeout = false
+      let stopSessionTimeoutGuard = () => {}
+
+      function getIdleTimeoutMinutes() {
+        const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+        if (!Number.isFinite(rawValue)) return ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT
+        return Math.min(ADMIN_IDLE_TIMEOUT_MINUTES_MAX, Math.max(ADMIN_IDLE_TIMEOUT_MINUTES_MIN, rawValue))
+      }
+
+      const ADMIN_IDLE_TIMEOUT_MS = getIdleTimeoutMinutes() * 60 * 1000
+
+      function setStatus(message, type = 'info') {
+        if (!(statusEl instanceof HTMLElement)) return
+        statusEl.textContent = message
+        statusEl.className = `status ${type}`
+      }
+
+      function clearIdleTimeoutTimer() {
+        if (idleTimeoutTimer) {
+          window.clearTimeout(idleTimeoutTimer)
+          idleTimeoutTimer = 0
+        }
+      }
+
+      function clearStoredAdminActivity() {
+        try {
+          window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY)
+        } catch {}
+      }
+
+      function readStoredActivity() {
+        try {
+          const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY)
+          if (!rawValue) return 0
+          const parsed = Number.parseInt(rawValue, 10)
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+        } catch {
+          return 0
+        }
+      }
+
+      function writeStoredActivity(timestamp) {
+        try {
+          window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(timestamp))
+        } catch {}
+      }
+
+      async function signOutByInactivity() {
+        if (isSigningOutForTimeout) return
+        isSigningOutForTimeout = true
+        stopSessionTimeoutGuard()
+        clearIdleTimeoutTimer()
+        setStatus(`Session expired after ${getIdleTimeoutMinutes()} minutes of inactivity. Please sign in again.`, 'info')
+
+        try {
+          await supabase.auth.signOut()
+        } catch {}
+
+        window.location.href = '/login?reason=timeout'
+      }
+
+      function scheduleIdleTimeout() {
+        clearIdleTimeoutTimer()
+        const now = Date.now()
+        const referenceActivityAt = Math.max(lastActivityAt, readStoredActivity())
+        const idleDurationMs = referenceActivityAt > 0 ? now - referenceActivityAt : 0
+        const remainingMs = ADMIN_IDLE_TIMEOUT_MS - idleDurationMs
+
+        if (remainingMs <= 0) {
+          void signOutByInactivity()
+          return
+        }
+
+        idleTimeoutTimer = window.setTimeout(() => {
+          void signOutByInactivity()
+        }, remainingMs + 250)
+      }
+
+      function noteActivity(force = false) {
+        const now = Date.now()
+        if (!force && now - lastActivityAt < ADMIN_ACTIVITY_THROTTLE_MS) {
+          return
+        }
+
+        lastActivityAt = now
+        writeStoredActivity(now)
+        scheduleIdleTimeout()
+      }
+
+      function startSessionTimeoutGuard() {
+        stopSessionTimeoutGuard()
+        const lightActivityListener = () => noteActivity(false)
+        const strongActivityListener = () => noteActivity(true)
+        const visibilityListener = () => {
+          if (document.visibilityState === 'visible') {
+            noteActivity(true)
+          }
+        }
+        const storageListener = (event) => {
+          if (event.key !== ADMIN_ACTIVITY_STORAGE_KEY) return
+          const nextValue = Number.parseInt(event.newValue || '', 10)
+          if (!Number.isFinite(nextValue) || nextValue <= 0) return
+          if (nextValue > lastActivityAt) {
+            lastActivityAt = nextValue
+            scheduleIdleTimeout()
+          }
+        }
+
+        window.addEventListener('pointerdown', strongActivityListener, { passive: true })
+        window.addEventListener('touchstart', strongActivityListener, { passive: true })
+        window.addEventListener('keydown', strongActivityListener)
+        window.addEventListener('mousemove', lightActivityListener, { passive: true })
+        window.addEventListener('scroll', lightActivityListener, { passive: true })
+        document.addEventListener('visibilitychange', visibilityListener)
+        window.addEventListener('storage', storageListener)
+
+        lastActivityAt = Math.max(Date.now(), readStoredActivity())
+        writeStoredActivity(lastActivityAt)
+        scheduleIdleTimeout()
+
+        stopSessionTimeoutGuard = () => {
+          clearIdleTimeoutTimer()
+          window.removeEventListener('pointerdown', strongActivityListener)
+          window.removeEventListener('touchstart', strongActivityListener)
+          window.removeEventListener('keydown', strongActivityListener)
+          window.removeEventListener('mousemove', lightActivityListener)
+          window.removeEventListener('scroll', lightActivityListener)
+          document.removeEventListener('visibilitychange', visibilityListener)
+          window.removeEventListener('storage', storageListener)
+        }
+      }
+
+      function isAboutAdminDomReady() {
+        return (
+          statusEl instanceof HTMLElement &&
+          appSection instanceof HTMLElement &&
+          logoutButton instanceof HTMLButtonElement &&
+          settingsForm instanceof HTMLFormElement &&
+          settingsSaveButton instanceof HTMLButtonElement &&
+          settingsResetButton instanceof HTMLButtonElement &&
+          settingsDeleteButton instanceof HTMLButtonElement &&
+          settingsHeroCount instanceof HTMLElement &&
+          settingsAboutCount instanceof HTMLElement &&
+          settingsLogoFileInput instanceof HTMLInputElement &&
+          settingsHomeImageFileInput instanceof HTMLInputElement &&
+          settingsLogoPreview instanceof HTMLImageElement &&
+          settingsHomeImagePreview instanceof HTMLImageElement &&
+          settingsFields.logoUrl instanceof HTMLInputElement &&
+          settingsFields.homeImageUrl instanceof HTMLInputElement &&
+          settingsFields.heroDescription instanceof HTMLTextAreaElement &&
+          settingsFields.aboutMe instanceof HTMLTextAreaElement
+        )
+      }
+
+      async function refreshAccessToken() {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+
+        if (error || !session?.access_token) {
+          throw new Error('Sesi login tidak valid. Silakan login ulang.')
+        }
+
+        accessToken = session.access_token
+        return accessToken
+      }
+
+      async function authorizedApiRequest(endpoint, init = {}) {
+        noteActivity(true)
+        const requestWithToken = async (token) => {
+          const headers = new Headers(init.headers || {})
+          headers.set('Authorization', `Bearer ${token}`)
+          const csrfTokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+          if (csrfTokenMatch?.[1]) {
+            headers.set('X-CSRF-Token', decodeURIComponent(csrfTokenMatch[1]))
+          }
+          return fetch(endpoint, {
+            ...init,
+            headers,
+          })
+        }
+
+        const currentToken = accessToken || (await refreshAccessToken())
+        let response = await requestWithToken(currentToken)
+
+        if (response.status === 401) {
+          const refreshedToken = await refreshAccessToken()
+          response = await requestWithToken(refreshedToken)
+        }
+
+        noteActivity(false)
+        return response
+      }
+
+      async function adminWrite(body) {
+        try {
+          const response = await authorizedApiRequest('/api/admin/supabase-write', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          })
+
+          let responseBody = null
+          try {
+            responseBody = await response.json()
+          } catch {
+            responseBody = null
+          }
+
+          if (!response.ok) {
+            return {
+              error: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Request gagal.',
+            }
+          }
+
+          return { error: null, data: responseBody?.data ?? null }
+        } catch (error) {
+          return {
+            error: error instanceof Error ? error.message : 'Request gagal.',
+          }
+        }
+      }
+
+      function setImagePreview(imgElement, value) {
+        const url = value.trim()
+        if (!url) {
+          imgElement.hidden = true
+          imgElement.removeAttribute('src')
+          return
+        }
+        imgElement.src = url
+        imgElement.hidden = false
+      }
+
+      function updateSettingsPreviews() {
+        setImagePreview(settingsLogoPreview, settingsFields.logoUrl.value)
+        setImagePreview(settingsHomeImagePreview, settingsFields.homeImageUrl.value)
+      }
+
+      function updateSettingsCounters() {
+        const heroLength = settingsFields.heroDescription.value.trim().length
+        const aboutLength = settingsFields.aboutMe.value.trim().length
+        settingsHeroCount.textContent = `${heroLength} chars`
+        settingsAboutCount.textContent = `${aboutLength} chars`
+      }
+
+      function clearSelectedAssetFiles() {
+        settingsLogoFileInput.value = ''
+        settingsHomeImageFileInput.value = ''
+      }
+
+      function fillSettingsForm(settings) {
+        settingsFields.logoUrl.value = settings.logo_url || ''
+        settingsFields.homeImageUrl.value = settings.home_image_url || defaultSettings.home_image_url
+        settingsFields.heroDescription.value = settings.hero_description || defaultSettings.hero_description
+        settingsFields.aboutMe.value = settings.about_me || defaultSettings.about_me
+        clearSelectedAssetFiles()
+        updateSettingsCounters()
+        updateSettingsPreviews()
+      }
+
+      function resetSettingsForm() {
+        if (currentSiteSettings) {
+          fillSettingsForm(currentSiteSettings)
+          return
+        }
+        fillSettingsForm(defaultSettings)
+      }
+
+      function serializeSettingsPayload(overrides = {}) {
+        const logoUrl = settingsFields.logoUrl.value.trim()
+        const homeImageUrl = settingsFields.homeImageUrl.value.trim()
+        const heroDescription = settingsFields.heroDescription.value.trim()
+        const aboutMe = settingsFields.aboutMe.value.trim()
+
+        const payload = {
+          id: SETTINGS_ROW_ID,
+          logo_url: logoUrl.length > 0 ? logoUrl : null,
+          home_image_url: homeImageUrl || defaultSettings.home_image_url,
+          hero_description: heroDescription || defaultSettings.hero_description,
+          about_me: aboutMe || defaultSettings.about_me,
+        }
+
+        return {
+          ...payload,
+          ...overrides,
+        }
+      }
+
+      function normalizeAssetName(value) {
+        return value
+          .toLowerCase()
+          .replace(/[^a-z0-9-]+/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '')
+      }
+
+      function getFileExtension(file) {
+        const match = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)
+        return match ? match[1] : 'bin'
+      }
+
+      async function compressImageForUpload(
+        file,
+        outputMime = 'image/webp',
+        maxWidth = 1920,
+        maxHeight = 1920,
+        quality = 0.82,
+      ) {
+        if (!file || !file.type.startsWith('image/')) return file
+
+        const mimeType = (file.type || '').toLowerCase()
+        if (mimeType === 'image/gif') {
+          return file
+        }
+
+        if (typeof createImageBitmap !== 'function') {
+          return file
+        }
+
+        let bitmap
+        try {
+          bitmap = await createImageBitmap(file)
+        } catch {
+          return file
+        }
+
+        try {
+          const widthScale = maxWidth / bitmap.width
+          const heightScale = maxHeight / bitmap.height
+          const scale = Math.min(1, widthScale, heightScale)
+          const targetWidth = Math.max(1, Math.round(bitmap.width * scale))
+          const targetHeight = Math.max(1, Math.round(bitmap.height * scale))
+
+          const canvas = document.createElement('canvas')
+          canvas.width = targetWidth
+          canvas.height = targetHeight
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            return file
+          }
+
+          ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
+
+          const compressedBlob = await new Promise((resolve) => {
+            canvas.toBlob((blob) => resolve(blob), outputMime, quality)
+          })
+
+          if (!compressedBlob) {
+            return file
+          }
+
+          if (compressedBlob.size >= file.size * IMAGE_COMPRESS_MIN_RATIO) {
+            return file
+          }
+
+          const baseName = normalizeAssetName(file.name.replace(/\.[^/.]+$/, '')) || 'image'
+          const ext = outputMime === 'image/jpeg' ? 'jpg' : outputMime === 'image/png' ? 'png' : 'webp'
+          return new File([compressedBlob], `${baseName}.${ext}`, {
+            type: outputMime,
+            lastModified: Date.now(),
+          })
+        } catch {
+          return file
+        } finally {
+          if (bitmap && typeof bitmap.close === 'function') {
+            bitmap.close()
+          }
+        }
+      }
+
+      function validateImageFile(file, label) {
+        if (!file) return false
+        if (!file.type.startsWith('image/')) {
+          setStatus(`${label} harus berupa image file.`, 'error')
+          return false
+        }
+        if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type.toLowerCase())) {
+          setStatus(`${label} harus berformat PNG, JPG, WEBP, atau GIF.`, 'error')
+          return false
+        }
+        if (file.size > MAX_ASSET_INPUT_BYTES) {
+          setStatus(`${label} terlalu besar (maks 20MB sebelum kompres).`, 'error')
+          return false
+        }
+        return true
+      }
+
+      async function uploadAssetFile(file, folder) {
+        let uploadCandidate = file
+        for (const plan of IMAGE_COMPRESSION_PLANS) {
+          const compressed = await compressImageForUpload(file, plan.mime, plan.maxWidth, plan.maxHeight, plan.quality)
+          if (compressed.size < uploadCandidate.size) {
+            uploadCandidate = compressed
+          }
+          if (uploadCandidate.size <= MAX_ASSET_UPLOAD_BYTES) break
+        }
+
+        if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
+          throw new Error('Ukuran gambar setelah kompres masih di atas 2MB. Gunakan gambar lebih kecil.')
+        }
+
+        const uploadOne = async (candidateFile) => {
+          const ext = getFileExtension(candidateFile)
+          const baseName = normalizeAssetName(candidateFile.name.replace(/\.[^/.]+$/, '')) || 'asset'
+          const response = await authorizedApiRequest('/api/admin/upload-asset', {
+            method: 'POST',
+            body: (() => {
+              const formData = new FormData()
+              formData.set('file', candidateFile, candidateFile.name)
+              formData.set('folder', folder)
+              formData.set('bucket', SITE_ASSETS_BUCKET)
+              formData.set('fileName', `${baseName}.${ext}`)
+              return formData
+            })(),
+          })
+
+          let responseBody = null
+          try {
+            responseBody = await response.json()
+          } catch {
+            responseBody = null
+          }
+
+          if (!response.ok) {
+            return {
+              error: { message: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Upload gagal.' },
+              filePath: '',
+              publicUrl: '',
+            }
+          }
+
+          return {
+            error: null,
+            filePath: typeof responseBody?.filePath === 'string' ? responseBody.filePath : '',
+            publicUrl: typeof responseBody?.publicUrl === 'string' ? responseBody.publicUrl : '',
+          }
+        }
+
+        let { error: uploadError, filePath, publicUrl } = await uploadOne(uploadCandidate)
+
+        if (uploadError) {
+          const message = (uploadError.message || '').toLowerCase()
+          const canRetryJpeg =
+            uploadCandidate.type === 'image/webp' &&
+            (message.includes('mime') || message.includes('allowed') || message.includes('invalid'))
+
+          if (canRetryJpeg) {
+            const jpegCandidate = await compressImageForUpload(file, 'image/jpeg', 800, 800, 0.54)
+            if (jpegCandidate.size <= MAX_ASSET_UPLOAD_BYTES) {
+              const retryResult = await uploadOne(jpegCandidate)
+              uploadError = retryResult.error
+              filePath = retryResult.filePath
+              publicUrl = retryResult.publicUrl
+            }
+          }
+
+          if (uploadError) {
+            const finalMessage = (uploadError.message || '').toLowerCase()
+            if (finalMessage.includes('bucket not found')) {
+              throw new Error(
+                `Bucket "${SITE_ASSETS_BUCKET}" tidak ditemukan. Buat bucket tersebut di Supabase Storage (public) atau sesuaikan PUBLIC_SUPABASE_ASSETS_BUCKET di .env.`,
+              )
+            }
+            throw new Error(uploadError.message)
+          }
+        }
+
+        if (!publicUrl) {
+          throw new Error(`Upload berhasil tetapi URL publik untuk "${filePath}" tidak tersedia.`)
+        }
+
+        return publicUrl
+      }
+
+      async function loadSiteSettings() {
+        const { data, error } = await supabase
+          .from('site_settings')
+          .select('id, logo_url, home_image_url, hero_description, about_me, updated_at')
+          .eq('id', SETTINGS_ROW_ID)
+          .maybeSingle()
+
+        if (error) {
+          const normalizedMessage = String(error.message || '').toLowerCase()
+          const missingTable =
+            normalizedMessage.includes('site_settings') &&
+            (normalizedMessage.includes('relation') ||
+              normalizedMessage.includes('does not exist') ||
+              normalizedMessage.includes('not found'))
+
+          currentSiteSettings = null
+          resetSettingsForm()
+
+          if (missingTable) {
+            setStatus(
+              'Tabel site_settings belum tersedia. Jalankan SQL terbaru di supabase/schema.sql lalu refresh halaman admin.',
+              'error',
+            )
+            return
+          }
+
+          setStatus(error.message, 'error')
+          return
+        }
+
+        currentSiteSettings = data || null
+        resetSettingsForm()
+      }
+
+      async function handleSettingsSubmit(event) {
+        event.preventDefault()
+
+        settingsSaveButton.disabled = true
+        settingsResetButton.disabled = true
+        settingsDeleteButton.disabled = true
+
+        try {
+          let logoUrl = settingsFields.logoUrl.value.trim()
+          let homeImageUrl = settingsFields.homeImageUrl.value.trim()
+
+          const logoFile = settingsLogoFileInput.files && settingsLogoFileInput.files[0]
+          const homeImageFile = settingsHomeImageFileInput.files && settingsHomeImageFileInput.files[0]
+
+          if (logoFile) {
+            if (!validateImageFile(logoFile, 'Logo')) return
+            setStatus('Uploading logo...', 'info')
+            logoUrl = await uploadAssetFile(logoFile, 'logos')
+            settingsFields.logoUrl.value = logoUrl
+          }
+
+          if (homeImageFile) {
+            if (!validateImageFile(homeImageFile, 'Hero image')) return
+            setStatus('Uploading hero image...', 'info')
+            homeImageUrl = await uploadAssetFile(homeImageFile, 'heroes')
+            settingsFields.homeImageUrl.value = homeImageUrl
+          }
+
+          const payload = serializeSettingsPayload({
+            logo_url: logoUrl.length > 0 ? logoUrl : null,
+            home_image_url: homeImageUrl || defaultSettings.home_image_url,
+          })
+
+          const { error } = await adminWrite({
+            table: 'site_settings',
+            action: 'upsert',
+            payload,
+            onConflict: 'id',
+          })
+
+          if (error) {
+            setStatus(error, 'error')
+            return
+          }
+
+          clearSelectedAssetFiles()
+          updateSettingsPreviews()
+          setStatus('Site settings saved.', 'success')
+          await loadSiteSettings()
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Upload gagal.'
+          setStatus(message, 'error')
+        } finally {
+          settingsSaveButton.disabled = false
+          settingsResetButton.disabled = false
+          settingsDeleteButton.disabled = false
+        }
+      }
+
+      async function handleSettingsDelete() {
+        const ok = window.confirm('Delete site settings row? Konten akan kembali ke default.')
+        if (!ok) return
+
+        settingsDeleteButton.disabled = true
+        const { error } = await adminWrite({
+          table: 'site_settings',
+          action: 'delete',
+          filters: [{ column: 'id', operator: 'eq', value: SETTINGS_ROW_ID }],
+        })
+        settingsDeleteButton.disabled = false
+
+        if (error) {
+          setStatus(error, 'error')
+          return
+        }
+
+        currentSiteSettings = null
+        resetSettingsForm()
+        setStatus('Site settings row deleted. Default values loaded in form.', 'success')
+      }
+
+      async function initialize() {
+        if (!isAboutAdminDomReady()) {
+          console.error('[Admin About] Required DOM elements are missing. Initialization aborted.')
+          setStatus('Admin UI gagal dimuat. Coba refresh halaman ini.', 'error')
+          return
+        }
+
+        const url = body.dataset.supabaseUrl || ''
+        const key = body.dataset.supabaseAnonKey || ''
+
+        if (!url || !key) {
+          setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
+          return
+        }
+
+        supabase = createClient(url, key)
+
+        logoutButton.addEventListener('click', async () => {
+          stopSessionTimeoutGuard()
+          clearStoredAdminActivity()
+          const { error } = await supabase.auth.signOut()
+          if (error) {
+            setStatus(error.message, 'error')
+            return
+          }
+          window.location.href = '/login'
+        })
+
+        settingsForm.addEventListener('submit', handleSettingsSubmit)
+        settingsResetButton.addEventListener('click', () => {
+          resetSettingsForm()
+          setStatus('Settings form reset.', 'info')
+        })
+        settingsDeleteButton.addEventListener('click', handleSettingsDelete)
+
+        settingsFields.logoUrl.addEventListener('input', updateSettingsPreviews)
+        settingsFields.homeImageUrl.addEventListener('input', updateSettingsPreviews)
+        settingsFields.heroDescription.addEventListener('input', updateSettingsCounters)
+        settingsFields.aboutMe.addEventListener('input', updateSettingsCounters)
+        settingsLogoFileInput.addEventListener('change', () => {
+          const file = settingsLogoFileInput.files && settingsLogoFileInput.files[0]
+          if (file) {
+            setStatus(`Logo file selected: ${file.name}`, 'info')
+          }
+        })
+        settingsHomeImageFileInput.addEventListener('change', () => {
+          const file = settingsHomeImageFileInput.files && settingsHomeImageFileInput.files[0]
+          if (file) {
+            setStatus(`Hero image file selected: ${file.name}`, 'info')
+          }
+        })
+
+        updateSettingsCounters()
+        updateSettingsPreviews()
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session) {
+          window.location.href = '/login'
+          return
+        }
+
+        accessToken = session.access_token || ''
+        startSessionTimeoutGuard()
+        appSection.hidden = false
+        setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+        await loadSiteSettings()
+
+        supabase.auth.onAuthStateChange((event, nextSession) => {
+          if (event === 'SIGNED_OUT') {
+            stopSessionTimeoutGuard()
+            window.location.href = '/login'
+            return
+          }
+          if (nextSession?.access_token) {
+            accessToken = nextSession.access_token
+            noteActivity(true)
+          }
+        })
+      }
+
+      initialize()
+    </script>

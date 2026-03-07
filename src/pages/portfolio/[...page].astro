@@ -1,0 +1,128 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import { Badge, Card, Heading, Link, Pagination } from 'accessible-astro-components'
+import { slugify } from '@utils/slugify'
+import { getProjects } from '@utils/projects'
+
+const PAGE_SIZE = 6
+const fallbackProjectImages = [
+  '/projects/project-image-1.png',
+  '/projects/project-image-2.png',
+  '/projects/project-image-3.png',
+  '/projects/project-image-4.png',
+  '/projects/project-image-5.png',
+  '/projects/project-image-6.png',
+]
+
+const projects = await getProjects()
+const allTags = projects.map((project) => project.tags).flat()
+const uniqueTagLabels = [...new Set(allTags)].sort((a, b) => a.localeCompare(b))
+const uniqueTags = uniqueTagLabels.map((label) => ({
+  label,
+  slug: slugify(label),
+}))
+
+const projectsWithImages = projects.map((project, index) => ({
+  ...project,
+  featuredImage: project.coverImageUrl || fallbackProjectImages[index % fallbackProjectImages.length],
+}))
+
+const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
+const parsedPage = Number.parseInt(rawPageParam, 10)
+const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
+const totalProjects = projectsWithImages.length
+const lastPage = Math.max(1, Math.ceil(totalProjects / PAGE_SIZE))
+const safePage = Math.min(currentPage, lastPage)
+const startIndex = (safePage - 1) * PAGE_SIZE
+const endIndex = startIndex + PAGE_SIZE
+const pageProjects = projectsWithImages.slice(startIndex, endIndex)
+const viewStart = totalProjects === 0 ? 0 : startIndex + 1
+const viewEnd = totalProjects === 0 ? 0 : Math.min(endIndex, totalProjects)
+const previousPageHref = safePage > 1 ? (safePage === 2 ? '/portfolio' : `/portfolio/${safePage - 1}`) : null
+const nextPageHref = safePage < lastPage ? `/portfolio/${safePage + 1}` : null
+const firstPageHref = safePage > 1 ? '/portfolio' : null
+const lastPageHref = safePage < lastPage ? `/portfolio/${lastPage}` : null
+---
+
+<DefaultLayout
+  title="Pengalaman & Portofolio"
+  description="Kumpulan pengalaman kerja dan proyek yang telah dikerjakan oleh Ibnu Rizal Mutaqim."
+>
+  <PageHeader title="Pengalaman & Portofolio" subtitle="Daftar proyek dan pengalaman saya." bgType="gradient" />
+
+  <section class="portfolio-list my-10 md:my-12">
+    <div class="container">
+      <Heading level="h2" size="h5" class="mb-2">Tag</Heading>
+      <div class="tag-cloud flex flex-wrap gap-3 md:gap-4">
+        {
+          uniqueTags.map((tag: { label: string; slug: string }) => (
+            <Link href={'/portfolio/tag/' + tag.slug}>{tag.label}</Link>
+          ))
+        }
+      </div>
+      <p class="mt-6 text-sm md:mt-8">
+        <em>Menampilkan proyek {viewStart} sampai {viewEnd} dari total {totalProjects} proyek</em>
+      </p>
+      <ul class="portfolio-grid mt-3">
+        {
+          pageProjects.map((project) => (
+            <li>
+              <Card
+                img={project.featuredImage}
+                url={'/portfolio/' + project.slug}
+                title={project.title}
+                headingLevel="h2"
+                footer={'Peran: ' + project.author}
+                fullHeight={true}
+              >
+                <span slot="meta">
+                  {project.tags.map((tag) => (
+                    <Badge>{tag}</Badge>
+                  ))}
+                </span>
+                {project.description}
+              </Card>
+            </li>
+          ))
+        }
+      </ul>
+      {
+        lastPage > 1 && (
+          <div class="mt-10 grid place-content-center md:mt-12">
+            <Pagination
+              firstPage={firstPageHref}
+              previousPage={previousPageHref}
+              nextPage={nextPageHref}
+              lastPage={lastPageHref}
+              currentPage={`${safePage}`}
+              totalPages={`${lastPage}`}
+              ariaLabel="Pagination portofolio"
+            />
+          </div>
+        )
+      }
+    </div>
+  </section>
+</DefaultLayout>
+
+<style lang="scss" is:global>
+  .portfolio-list .portfolio-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    gap: clamp(1rem, 2.2vw, 1.45rem);
+  }
+
+  .portfolio-list .portfolio-grid > li {
+    min-inline-size: 0;
+  }
+
+  .portfolio-list .portfolio-grid :is(h2, h3, h4, p, a, span) {
+    overflow-wrap: anywhere;
+  }
+
+  .portfolio-list .tag-cloud a {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+</style>

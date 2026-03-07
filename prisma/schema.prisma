@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Project {
+  id            String   @id @default(uuid()) @db.Uuid
+  slug          String   @unique
+  title         String
+  author        String
+  description   String
+  tags          String[] @default([])
+  body          String   @default("")
+  coverImageUrl String?  @map("cover_image_url")
+  contentBlocks Json     @default(dbgenerated("'[]'::jsonb")) @map("content_blocks")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("projects")
+}
+
+model SiteSetting {
+  id              String   @id @default("main")
+  logoUrl         String?  @map("logo_url")
+  homeImageUrl    String   @default("/astronaut-hero-img.webp") @map("home_image_url")
+  heroDescription String   @default("Saya Ibnu Rizal Mutaqim, seorang developer yang berfokus membangun website cepat, rapi, dan mudah dikelola.") @map("hero_description")
+  aboutMe         String   @default("Saya fokus pada pengembangan web modern yang cepat, accessible, dan mudah dipelihara. Saya terbiasa mengerjakan antarmuka, integrasi API, serta optimasi performa agar produk digital siap dipakai di dunia nyata.") @map("about_me")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
+
+model BlogPost {
+  id            String   @id @default(uuid()) @db.Uuid
+  slug          String   @unique
+  title         String
+  author        String
+  description   String
+  tags          String[] @default([])
+  body          String   @default("")
+  coverImageUrl String?  @map("cover_image_url")
+  contentBlocks Json     @default(dbgenerated("'[]'::jsonb")) @map("content_blocks")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("blog_posts")
+}
+
+model ContactMessage {
+  id        String    @id @default(uuid()) @db.Uuid
+  fullName  String    @map("full_name")
+  email     String
+  phone     String
+  message   String
+  isRead    Boolean   @default(false) @map("is_read")
+  repliedVia String?  @map("replied_via")
+  repliedAt DateTime? @map("replied_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@map("contact_messages")
+}

@@ -1,0 +1,149 @@
+---
+import { Launcher, LauncherPreferences, LauncherSwitch, LauncherNav, LauncherLink } from 'accessible-astro-launcher'
+import { Icon } from 'astro-icon/components'
+import themeConfig from '@theme-config'
+import { getProjects } from '@utils/projects'
+import { getBlogPosts } from '@utils/blog-posts'
+
+// Package typings are stricter than runtime usage for slotted children.
+const LauncherAny = Launcher as any
+const LauncherPreferencesAny = LauncherPreferences as any
+const LauncherSwitchAny = LauncherSwitch as any
+const LauncherNavAny = LauncherNav as any
+const LauncherLinkAny = LauncherLink as any
+
+interface LauncherPreferenceItem {
+  label: string
+  onAction: string
+}
+
+interface LauncherKeywordItem {
+  label: string
+  href: string
+  keywords: string[]
+}
+
+interface LauncherNavigationItem {
+  label: string
+  href: string
+  external?: boolean
+}
+
+interface LauncherSocialItem extends LauncherNavigationItem {
+  icon: string
+}
+
+const launcherPreferenceItems: LauncherPreferenceItem[] = [
+  {
+    label: 'Dark mode',
+    onAction: 'toggle-dark-mode',
+  },
+  {
+    label: 'High contrast',
+    onAction: 'toggle-high-contrast',
+  },
+  {
+    label: 'Reduced motion',
+    onAction: 'toggle-reduced-motion',
+  },
+]
+
+const launcherProjectItems: LauncherKeywordItem[] = (await getProjects()).map((project) => ({
+  label: project.title,
+  href: `/portfolio/${project.slug}`,
+  keywords: [project.author, ...project.tags],
+}))
+
+const launcherBlogItems: LauncherKeywordItem[] = (await getBlogPosts()).map((post) => ({
+  label: post.title,
+  href: `/blog/${post.slug}`,
+  keywords: [post.author, ...post.tags],
+}))
+
+const launcherNavigationItems: LauncherNavigationItem[] = themeConfig.navigation.items.flatMap((item) => {
+  if (item.excludeFromLauncher) {
+    return []
+  }
+
+  if (item.type === 'dropdown') {
+    return item.items.map((subItem) => ({
+      label: subItem.label,
+      href: subItem.href,
+      external: subItem.external ?? false,
+    }))
+  }
+
+  if (!item.type || item.type === 'link') {
+    return [
+      {
+        label: item.label,
+        href: item.href,
+        external: item.external ?? false,
+      },
+    ]
+  }
+
+  return []
+})
+
+const launcherSocialItems: LauncherSocialItem[] = (themeConfig.socials ?? []).map((item) => ({
+  label: item.label,
+  href: item.href,
+  icon: item.icon,
+  external: item.external ?? false,
+}))
+---
+
+<LauncherAny id="site-launcher">
+  <LauncherPreferencesAny label="Preferences">
+    {launcherPreferenceItems.map((item) => <LauncherSwitchAny label={item.label} onAction={item.onAction} />)}
+  </LauncherPreferencesAny>
+  <LauncherNavAny label="Navigation">
+    {
+      launcherNavigationItems.map((item) => (
+        <LauncherLinkAny
+          label={item.label}
+          href={item.href}
+          {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+        />
+      ))
+    }
+  </LauncherNavAny>
+  {
+    launcherProjectItems.length > 0 && (
+      <LauncherNavAny label="Portfolio">
+        {launcherProjectItems.map((item) => (
+          <LauncherLinkAny label={item.label} href={item.href} keywords={item.keywords}>
+            <Icon slot="icon" aria-hidden="true" name="lucide:bookmark" size="16" />
+          </LauncherLinkAny>
+        ))}
+      </LauncherNavAny>
+    )
+  }
+  {
+    launcherBlogItems.length > 0 && (
+      <LauncherNavAny label="Blog">
+        {launcherBlogItems.map((item) => (
+          <LauncherLinkAny label={item.label} href={item.href} keywords={item.keywords}>
+            <Icon slot="icon" aria-hidden="true" name="lucide:notebook-pen" size="16" />
+          </LauncherLinkAny>
+        ))}
+      </LauncherNavAny>
+    )
+  }
+  {
+    launcherSocialItems.length > 0 && (
+      <LauncherNavAny label="Contact">
+        {launcherSocialItems.map((item) => (
+          <LauncherLinkAny
+            label={item.label}
+            href={item.href}
+            {...(item.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          >
+            <Icon slot="icon" aria-hidden="true" name={item.icon} size="16" />
+          </LauncherLinkAny>
+        ))}
+      </LauncherNavAny>
+    )
+  }
+</LauncherAny>

@@ -1,0 +1,25 @@
+---
+const currentYear = new Date().getFullYear()
+const profileName = 'Ibnu Rizal Mutaqim'
+---
+
+<footer class="site-footer py-8">
+  <div class="container footer-inner flex flex-col gap-2 text-center md:flex-row md:justify-between md:text-left">
+    <p>&copy; {currentYear} - {profileName}</p>
+    <p>Dibuat untuk pribadi.</p>
+  </div>
+</footer>
+
+<style>
+  .site-footer {
+    border-top: 1px solid var(--border-color-subtle);
+  }
+
+  .footer-inner {
+    font-size: clamp(0.92rem, 1.2vw, 1rem);
+  }
+
+  .footer-inner p {
+    overflow-wrap: anywhere;
+  }
+</style>

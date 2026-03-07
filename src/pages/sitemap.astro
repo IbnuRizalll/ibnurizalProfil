@@ -1,0 +1,143 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import { Heading, Notification } from 'accessible-astro-components'
+import { getProjects } from '@utils/projects'
+import { getBlogPosts } from '@utils/blog-posts'
+
+const projects = await getProjects()
+const blogPosts = await getBlogPosts()
+
+const staticPages = [
+  {
+    title: 'About Me',
+    url: '/',
+    description: 'Halaman utama profil profesional Ibnu Rizal Mutaqim.',
+  },
+  {
+    title: 'Pengalaman & Portofolio',
+    url: '/portfolio',
+    description: 'Kumpulan pengalaman dan proyek yang sudah dipublikasikan.',
+  },
+  {
+    title: 'Blog',
+    url: '/blog',
+    description: 'Kumpulan catatan harian, insight, dan tulisan teknis.',
+  },
+  {
+    title: 'Kontak',
+    url: '/contact',
+    description: 'Halaman kontak untuk kebutuhan kolaborasi pekerjaan.',
+  },
+]
+---
+
+<DefaultLayout
+  title="Sitemap"
+  description="Daftar halaman dan proyek yang tersedia di website profil Ibnu Rizal Mutaqim."
+>
+  <PageHeader title="Sitemap" subtitle="Ringkasan halaman agar navigasi website lebih mudah." bgType="gradient" />
+
+  <section class="my-16">
+    <div class="container space-y-12">
+      <div>
+        <Heading level="h2" class="mb-6">Halaman Utama</Heading>
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {
+            staticPages.map((page) => (
+              <article>
+                <Heading level="h3" size="h6" class="mb-3">
+                  <a href={page.url}>{page.title}</a>
+                </Heading>
+                <p class="mb-3">{page.description}</p>
+                <p class="text-xs">
+                  URL:{' '}
+                  <code class="rounded bg-neutral-100 px-1 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500">
+                    {page.url}
+                  </code>
+                </p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+
+      <div>
+        <Heading level="h2">Daftar Proyek</Heading>
+        <p class="mb-6">Total proyek terpublikasi saat ini: {projects.length}</p>
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {
+            projects.map((project) => (
+              <article>
+                <Heading level="h3" size="h6" class="mb-3">
+                  <a href={`/portfolio/${project.slug}`}>{project.title}</a>
+                </Heading>
+                <p class="mb-3">{project.description}</p>
+                <div class="text-xs">
+                  <p class="mb-1">
+                    Peran: <span class="font-medium">{project.author}</span>
+                  </p>
+                  <p>
+                    URL:{' '}
+                    <code class="rounded bg-neutral-100 px-1 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500">
+                      /portfolio/{project.slug}
+                    </code>
+                  </p>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+
+      <div>
+        <Heading level="h2">Daftar Blog Posts</Heading>
+        <p class="mb-6">Total tulisan terpublikasi saat ini: {blogPosts.length}</p>
+        <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {
+            blogPosts.map((post) => (
+              <article>
+                <Heading level="h3" size="h6" class="mb-3">
+                  <a href={`/blog/${post.slug}`}>{post.title}</a>
+                </Heading>
+                <p class="mb-3">{post.description}</p>
+                <div class="text-xs">
+                  <p class="mb-1">
+                    Author: <span class="font-medium">{post.author}</span>
+                  </p>
+                  <p>
+                    URL:{' '}
+                    <code class="rounded bg-neutral-100 px-1 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-500">
+                      /blog/{post.slug}
+                    </code>
+                  </p>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+
+      <Notification type="info" variant="accent">
+        <div class="space-content">
+          <Heading level="h2" size="h6" class="mb-4">Informasi Teknis</Heading>
+          <ul>
+            <li>
+              XML sitemap otomatis tersedia di <code>/sitemap.xml</code>.
+            </li>
+            <li>Halaman ini ikut diperbarui saat build website dijalankan.</li>
+          </ul>
+        </div>
+      </Notification>
+    </div>
+  </section>
+</DefaultLayout>
+
+<style>
+  article {
+    border: 1px solid var(--border-color-subtle);
+    border-radius: var(--radius-large);
+    background-color: var(--background-color);
+    padding: 1rem;
+  }
+</style>

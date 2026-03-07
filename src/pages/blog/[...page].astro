@@ -1,0 +1,106 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import { Badge, Card, Pagination } from 'accessible-astro-components'
+import { getBlogPosts } from '@utils/blog-posts'
+
+const PAGE_SIZE = 6
+const fallbackPostImages = [
+  '/posts/post-image-1.png',
+  '/posts/post-image-2.png',
+  '/posts/post-image-3.png',
+  '/posts/post-image-4.png',
+  '/posts/post-image-5.png',
+  '/posts/post-image-6.png',
+]
+
+const posts = await getBlogPosts()
+const postsWithImages = posts.map((post, index) => ({
+  ...post,
+  featuredImage: post.coverImageUrl || fallbackPostImages[index % fallbackPostImages.length],
+}))
+
+const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
+const parsedPage = Number.parseInt(rawPageParam, 10)
+const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
+const totalPosts = postsWithImages.length
+const lastPage = Math.max(1, Math.ceil(totalPosts / PAGE_SIZE))
+const safePage = Math.min(currentPage, lastPage)
+const startIndex = (safePage - 1) * PAGE_SIZE
+const endIndex = startIndex + PAGE_SIZE
+const pagePosts = postsWithImages.slice(startIndex, endIndex)
+const viewStart = totalPosts === 0 ? 0 : startIndex + 1
+const viewEnd = totalPosts === 0 ? 0 : Math.min(endIndex, totalPosts)
+const previousPageHref = safePage > 1 ? (safePage === 2 ? '/blog' : `/blog/${safePage - 1}`) : null
+const nextPageHref = safePage < lastPage ? `/blog/${safePage + 1}` : null
+const firstPageHref = safePage > 1 ? '/blog' : null
+const lastPageHref = safePage < lastPage ? `/blog/${lastPage}` : null
+---
+
+<DefaultLayout title="Blog" description="Catatan, insight, dan tulisan harian Ibnu Rizal Mutaqim.">
+  <PageHeader title="Tulisan saat senggang" subtitle="Isinya catatan iseng aja, sesuai isi hati." bgType="gradient" />
+
+  <section class="blog-list my-10 md:my-12">
+    <div class="container">
+      <p class="mt-1 text-sm md:mt-2">
+        <em>Menampilkan tulisan {viewStart} sampai {viewEnd} dari total {totalPosts} tulisan</em>
+      </p>
+
+      <ul class="post-grid mt-4">
+        {
+          pagePosts.map((post) => (
+            <li>
+              <Card
+                img={post.featuredImage}
+                url={'/blog/' + post.slug}
+                title={post.title}
+                headingLevel="h2"
+                footer={'By: ' + post.author}
+                fullHeight={true}
+              >
+                <span slot="meta">
+                  {post.tags.map((tag) => (
+                    <Badge>{tag}</Badge>
+                  ))}
+                </span>
+                {post.description}
+              </Card>
+            </li>
+          ))
+        }
+      </ul>
+
+      {
+        lastPage > 1 && (
+          <div class="mt-10 grid place-content-center md:mt-12">
+            <Pagination
+              firstPage={firstPageHref}
+              previousPage={previousPageHref}
+              nextPage={nextPageHref}
+              lastPage={lastPageHref}
+              currentPage={`${safePage}`}
+              totalPages={`${lastPage}`}
+              ariaLabel="Pagination blog"
+            />
+          </div>
+        )
+      }
+    </div>
+  </section>
+</DefaultLayout>
+
+<style lang="scss" is:global>
+  .blog-list .post-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    gap: clamp(1rem, 2.2vw, 1.45rem);
+  }
+
+  .blog-list .post-grid > li {
+    min-inline-size: 0;
+  }
+
+  .blog-list .post-grid :is(h2, h3, h4, p, a, span) {
+    overflow-wrap: anywhere;
+  }
+</style>

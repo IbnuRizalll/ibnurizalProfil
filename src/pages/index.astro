@@ -1,0 +1,27 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import Hero from '@components/Hero.astro'
+import FeaturedProjects from '@components/FeaturedProjects.astro'
+import FeaturedBlogPosts from '@components/FeaturedBlogPosts.astro'
+import AboutTerminal from '@components/AboutTerminal.astro'
+import { getSiteSettings } from '@utils/site-settings'
+import { Heading } from 'accessible-astro-components'
+
+const siteSettings = await getSiteSettings()
+---
+
+<DefaultLayout title="Ibnu Rizal Mutaqim - Profil & Portofolio" useTitleTemplate={false}>
+  <Hero src={siteSettings.homeImageUrl} description="Holaa! Selamat datang di website profil saya.">
+    <span class="text-gradient" data-hero-greeting>Haiiii Haiii</span>
+  </Hero>
+
+  <section class="my-16 md:my-24 lg:my-32">
+    <div class="container">
+      <Heading level="h2" class="mb-8">About Me</Heading>
+      <AboutTerminal content={siteSettings.aboutMe} commandLabel="./tentang_saya" />
+    </div>
+  </section>
+
+  <FeaturedProjects title="Pengalaman & Proyek Pilihan" />
+  <FeaturedBlogPosts title="Tulisan saat senggang saja" />
+</DefaultLayout>

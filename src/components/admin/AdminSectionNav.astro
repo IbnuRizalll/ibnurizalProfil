@@ -1,0 +1,31 @@
+---
+type AdminSectionKey = 'about' | 'portfolio' | 'blog' | 'messages' | 'storage'
+
+interface Props {
+  active: AdminSectionKey
+}
+
+const { active } = Astro.props
+
+const sections: Array<{ key: AdminSectionKey; href: string; label: string }> = [
+  { key: 'about', href: '/admin/about', label: 'Edit About Me' },
+  { key: 'portfolio', href: '/admin/portfolio', label: 'Edit Portofolio/Pengalaman' },
+  { key: 'blog', href: '/admin/blog', label: 'Edit Blog' },
+  { key: 'messages', href: '/admin/messages', label: 'Contact Messages' },
+  { key: 'storage', href: '/admin/storage', label: 'Storage Cleanup' },
+]
+---
+
+<nav class="panel admin-section-nav" aria-label="Admin page navigation">
+  {
+    sections.map((section) => (
+      <a
+        class:list={['link-chip', 'nav-link', section.key === active && 'is-active']}
+        href={section.href}
+        aria-current={section.key === active ? 'page' : undefined}
+      >
+        {section.label}
+      </a>
+    ))
+  }
+</nav>

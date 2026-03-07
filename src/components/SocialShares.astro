@@ -1,0 +1,34 @@
+---
+import { Link } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+import themeConfig from '@theme-config'
+
+/**
+ * SocialShares Component
+ *
+ * @description A component for linking social media profiles from theme config
+ */
+interface Props {
+  class?: string
+}
+
+const { class: className = '' } = Astro.props
+const socialItems = themeConfig.socials ?? []
+---
+
+{
+  socialItems.length > 0 ? (
+    <ul class:list={['social-list flex flex-wrap gap-2', className]}>
+      {socialItems.map((social) => (
+        <li>
+          <Link href={social.href} isButton isExternal={social.external ?? true} hideIcon animateOnHover animationType="boop">
+            <Icon aria-hidden="true" name={social.icon} size={22} />
+            <span>{social.label}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p>Social links are not configured yet.</p>
+  )
+}

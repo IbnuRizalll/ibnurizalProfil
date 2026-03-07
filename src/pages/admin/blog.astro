@@ -1,0 +1,696 @@
+---
+import themeConfig from '@theme-config'
+import AdminSectionNav from '@components/admin/AdminSectionNav.astro'
+import BlogAdminScript from '@components/admin/scripts/BlogAdminScript.astro'
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL ?? ''
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
+const supabaseAssetsBucket = import.meta.env.PUBLIC_SUPABASE_ASSETS_BUCKET ?? 'site-assets'
+const rawAdminIdleTimeoutMinutes = Number.parseInt(import.meta.env.PUBLIC_ADMIN_IDLE_TIMEOUT_MINUTES ?? '20', 10)
+const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
+  ? Math.min(30, Math.max(15, rawAdminIdleTimeoutMinutes))
+  : 20
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Admin - Edit Blog</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style
+      is:global
+      define:vars={{
+        brandPrimary: themeConfig.colors.primary,
+        brandSecondary: themeConfig.colors.secondary,
+        brandNeutral: themeConfig.colors.neutral,
+        brandOutline: themeConfig.colors.outline,
+      }}
+    >
+      :root {
+        color-scheme: light dark;
+        --brand-primary: var(--brandPrimary);
+        --brand-secondary: var(--brandSecondary);
+        --brand-neutral: var(--brandNeutral);
+        --brand-outline: var(--brandOutline);
+        --text-color: light-dark(#1f2530, #f8f9fc);
+        --surface: light-dark(rgba(255, 255, 255, 0.8), rgba(20, 24, 30, 0.9));
+        --surface-soft: light-dark(rgba(247, 250, 253, 0.88), rgba(32, 37, 44, 0.9));
+        --border-soft: light-dark(rgba(31, 37, 48, 0.14), rgba(244, 247, 250, 0.15));
+        --status-info: #2f6fd8;
+        --status-success: #16803d;
+        --status-error: #b42318;
+        --shadow-lg: 0 24px 54px rgba(7, 12, 18, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 0% -12%,
+            color-mix(in oklab, var(--brand-primary) 34%, transparent),
+            transparent 38%
+          ),
+          radial-gradient(
+            circle at 100% -8%,
+            color-mix(in oklab, var(--brand-secondary) 28%, transparent),
+            transparent 35%
+          ),
+          linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
+        min-height: 100vh;
+        color: var(--text-color);
+        line-height: 1.55;
+        font-family:
+          Atkinson Hyperlegible,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+
+      body::before {
+        position: fixed;
+        opacity: 0.23;
+        inset: 0;
+        background-image:
+          linear-gradient(to right, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px),
+          linear-gradient(to bottom, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px);
+        background-size: 24px 24px;
+        pointer-events: none;
+        content: '';
+      }
+
+      .admin-shell {
+        position: relative;
+        margin-inline: auto;
+        padding: clamp(1rem, 2.8vw, 2rem);
+        max-width: 1320px;
+      }
+
+      .panel {
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-soft);
+        border-radius: 20px;
+        background: var(--surface);
+      }
+
+      .admin-header {
+        display: grid;
+        gap: 1rem;
+        padding: clamp(1rem, 2.6vw, 1.5rem);
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: color-mix(in oklab, var(--text-color) 70%, transparent);
+        font-weight: 700;
+        font-size: 0.82rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 0.35rem;
+        font-size: clamp(1.55rem, 3.6vw, 2.3rem);
+        line-height: 1.15;
+      }
+
+      .lead {
+        margin-top: 0.38rem;
+        max-width: 60ch;
+        color: color-mix(in oklab, var(--text-color) 78%, transparent);
+      }
+
+      .header-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.6rem;
+      }
+
+      .link-chip,
+      .button {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.35rem;
+        transition:
+          transform 140ms ease,
+          box-shadow 200ms ease,
+          border-color 160ms ease,
+          background-color 160ms ease;
+        cursor: pointer;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
+        padding: 0.62rem 0.85rem;
+        color: inherit;
+        font: inherit;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .link-chip:hover,
+      .button:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in oklab, var(--brand-primary) 36%, var(--border-soft));
+        background: color-mix(in oklab, var(--surface-soft) 62%, var(--brand-primary) 16%);
+      }
+
+      .button.primary {
+        border-color: color-mix(in oklab, var(--brand-primary) 35%, var(--border-soft));
+        background: linear-gradient(
+          140deg,
+          color-mix(in oklab, var(--brand-primary) 20%, var(--surface-soft)),
+          color-mix(in oklab, var(--brand-secondary) 14%, var(--surface-soft))
+        );
+      }
+
+      .button.small {
+        padding: 0.45rem 0.72rem;
+        font-size: 0.92rem;
+      }
+
+      .button.ghost {
+        background: color-mix(in oklab, var(--surface-soft) 70%, transparent);
+      }
+
+      .button:focus-visible,
+      .link-chip:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible,
+      input[type='file']:focus-visible {
+        outline: 2px solid transparent;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand-outline) 28%, transparent);
+      }
+
+      .button[disabled] {
+        transform: none;
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .admin-section-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin: 1rem 0;
+        padding: clamp(0.8rem, 2vw, 1rem);
+      }
+
+      .nav-link.is-active {
+        border-color: color-mix(in oklab, var(--brand-primary) 45%, var(--border-soft));
+        background: linear-gradient(
+          145deg,
+          color-mix(in oklab, var(--brand-primary) 22%, var(--surface-soft)),
+          color-mix(in oklab, var(--brand-secondary) 14%, var(--surface-soft))
+        );
+      }
+
+      .status {
+        margin: 1rem 0;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 88%, transparent);
+        padding: 0.72rem 0.85rem;
+      }
+
+      .status.info {
+        border-color: color-mix(in oklab, var(--status-info) 52%, var(--border-soft));
+      }
+
+      .status.success {
+        border-color: color-mix(in oklab, var(--status-success) 52%, var(--border-soft));
+      }
+
+      .status.error {
+        border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
+      }
+
+      .workspace {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .editor-panel,
+      .list-panel {
+        padding: clamp(1rem, 2.4vw, 1.35rem);
+      }
+
+      .panel-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.8rem;
+        margin-bottom: 0.95rem;
+      }
+
+      .panel-head p {
+        margin-top: 0.28rem;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.95rem;
+      }
+
+      .editor-form {
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      .field-grid {
+        display: grid;
+        gap: 0.8rem;
+      }
+
+      .field-grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      .field {
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .field label {
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+
+      input,
+      textarea {
+        transition:
+          border-color 140ms ease,
+          box-shadow 190ms ease;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
+        padding: 0.72rem 0.86rem;
+        width: 100%;
+        color: inherit;
+        font: inherit;
+      }
+
+      textarea {
+        min-height: 132px;
+        resize: vertical;
+      }
+
+      input[type='file'] {
+        border-style: dashed;
+        padding: 0.62rem 0.7rem;
+      }
+
+      .field-inline-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        color: color-mix(in oklab, var(--text-color) 72%, transparent);
+        font-size: 0.86rem;
+      }
+
+      .helper {
+        margin-top: 0.05rem;
+        border: 1px dashed var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 72%, transparent);
+        padding: 0.65rem 0.75rem;
+        color: color-mix(in oklab, var(--text-color) 76%, transparent);
+        font-size: 0.92rem;
+      }
+
+      .form-actions,
+      .toolbar,
+      .project-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+      }
+
+      .search-wrap {
+        position: relative;
+        min-width: min(100%, 260px);
+      }
+
+      .search-wrap input {
+        padding-left: 2rem;
+      }
+
+      .search-wrap::before {
+        position: absolute;
+        inset-block-start: 0.62rem;
+        inset-inline-start: 0.74rem;
+        pointer-events: none;
+        content: '⌕';
+        color: color-mix(in oklab, var(--text-color) 68%, transparent);
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.55rem;
+        margin-bottom: 0.9rem;
+      }
+
+      .metric {
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 76%, transparent);
+        padding: 0.62rem 0.68rem;
+      }
+
+      .metric p {
+        margin: 0;
+        color: color-mix(in oklab, var(--text-color) 72%, transparent);
+        font-size: 0.84rem;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 0.2rem;
+        font-size: 1.24rem;
+      }
+
+      .project-list {
+        display: grid;
+        gap: 0.65rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .project-item {
+        border: 1px solid var(--border-soft);
+        border-radius: 16px;
+        background: color-mix(in oklab, var(--surface-soft) 74%, transparent);
+        padding: 0.8rem;
+      }
+
+      .project-meta {
+        margin-top: 0.2rem;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.88rem;
+      }
+
+      .project-description {
+        margin-top: 0.45rem;
+      }
+
+      .empty-state {
+        border: 1px dashed var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 70%, transparent);
+        padding: 0.9rem;
+      }
+
+      .block-list {
+        display: grid;
+        gap: 0.7rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .block-item {
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 78%, transparent);
+        padding: 0.75rem;
+      }
+
+      .block-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.7rem;
+        margin-bottom: 0.62rem;
+      }
+
+      .block-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+
+      .block-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+      }
+
+      .block-body {
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .block-body .form-actions {
+        align-items: center;
+      }
+
+      .block-body .form-actions input[type='file'] {
+        flex: 1 1 240px;
+        min-width: 0;
+      }
+
+      .block-body > .helper {
+        margin-top: 0;
+      }
+
+      .sr-only {
+        position: absolute;
+        margin: -1px;
+        padding: 0;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+        white-space: nowrap;
+      }
+
+      .muted {
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+      }
+
+      @media (max-width: 860px) {
+        .panel-head {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        .header-actions,
+        .toolbar,
+        .form-actions,
+        .project-actions {
+          inline-size: 100%;
+        }
+
+        .header-actions .button,
+        .header-actions .link-chip,
+        .toolbar .button,
+        .form-actions .button,
+        .project-actions .button {
+          flex: 1 1 150px;
+        }
+
+        .search-wrap {
+          min-width: 100%;
+          width: 100%;
+        }
+
+        .field-inline-meta {
+          flex-wrap: wrap;
+          align-items: flex-start;
+        }
+      }
+
+      @media (min-width: 1080px) {
+        .admin-header {
+          grid-template-columns: 1fr auto;
+          align-items: center;
+        }
+
+        .workspace {
+          grid-template-columns: minmax(320px, 0.9fr) minmax(430px, 1.15fr);
+          align-items: start;
+        }
+
+        .editor-panel {
+          position: sticky;
+          inset-block-start: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body
+    data-supabase-url={supabaseUrl}
+    data-supabase-anon-key={supabaseAnonKey}
+    data-supabase-assets-bucket={supabaseAssetsBucket}
+    data-admin-idle-timeout-minutes={adminIdleTimeoutMinutes}
+  >
+    <main class="admin-shell">
+      <header class="panel admin-header">
+        <div>
+          <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
+          <h1>Edit Blog / Daily Notes</h1>
+          <p class="lead">Kelola catatan harian dan artikel blog dari Supabase.</p>
+        </div>
+        <div class="header-actions">
+          <a class="link-chip" href="/">Preview website</a>
+          <button class="button ghost" id="logout-button" type="button">Sign out</button>
+        </div>
+      </header>
+
+      <AdminSectionNav active="blog" />
+
+      <div class="status info" id="status" role="status" aria-live="polite">Initializing...</div>
+
+      <section class="workspace" id="app-section" hidden>
+        <section class="panel editor-panel" aria-labelledby="project-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="project-title">Blog Post Editor</h2>
+              <p>Tulis detail tulisan, slug akan otomatis mengikuti title.</p>
+            </div>
+          </div>
+
+          <form id="project-form" class="editor-form" aria-describedby="project-help">
+            <input id="project-id" type="hidden" />
+
+            <div class="field-grid two">
+              <div class="field">
+                <label for="title">Title</label>
+                <input id="title" type="text" required />
+              </div>
+              <div class="field">
+                <label for="slug">Slug</label>
+                <input id="slug" type="text" placeholder="auto-generated-from-title" required />
+              </div>
+            </div>
+
+            <p class="helper" id="project-help">
+              Slug URL: <code id="slug-preview">/blog/nama-post</code>
+            </p>
+
+            <div class="field-grid two">
+              <div class="field">
+                <label for="author">Author</label>
+                <input id="author" type="text" required />
+              </div>
+              <div class="field">
+                <label for="tags">Tags (comma separated)</label>
+                <input id="tags" type="text" placeholder="frontend, astro, accessibility" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="description">Description</label>
+              <textarea id="description" required></textarea>
+              <div class="field-inline-meta">
+                <span>Ringkasan tulisan.</span><span id="description-count">0 chars</span>
+              </div>
+            </div>
+
+            <div class="field-grid two">
+              <div class="field">
+                <label for="cover-image-url">Cover Image URL</label>
+                <input id="cover-image-url" type="url" placeholder="https://..." />
+                <div class="field-inline-meta">
+                  <span>Gambar utama untuk kartu dan halaman detail blog.</span>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="cover-image-file">Upload Cover Image</label>
+                <input
+                  id="cover-image-file"
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif"
+                />
+                <div class="field-inline-meta">
+                  <span>Opsional, otomatis upload ke bucket <code>{supabaseAssetsBucket}</code>.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label>Konten Blok (gaya artikel)</label>
+              <div class="toolbar">
+                <button class="button small" type="button" id="add-paragraph-block">+ Paragraph</button>
+                <button class="button small" type="button" id="add-image-block">+ Image</button>
+                <button class="button small" type="button" id="add-table-block">+ Table</button>
+              </div>
+              <p class="helper">
+                Urutkan isi artikel dengan blok. Untuk tabel: kolom dipisahkan dengan tanda <code>|</code>.
+                File gambar pada blok akan otomatis di-upload saat save jika belum di-upload manual.
+              </p>
+              <div class="field-inline-meta">
+                <span>Konten detail tulisan.</span><span id="block-count">0 blocks</span>
+              </div>
+              <ul id="content-block-list" class="block-list"></ul>
+            </div>
+
+            <div class="form-actions">
+              <button class="button primary" type="submit" id="save-button">Save post</button>
+              <button class="button" type="button" id="reset-button">Clear form</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel list-panel" aria-labelledby="list-title">
+          <div class="panel-head">
+            <div>
+              <h2 id="list-title">Daftar Blog Posts</h2>
+              <p>Data diambil real-time dari tabel <code>blog_posts</code>.</p>
+            </div>
+            <div class="toolbar">
+              <label class="search-wrap" for="search-input">
+                <span class="sr-only">Search blog posts</span>
+                <input id="search-input" type="search" placeholder="Search title, slug, tag..." />
+              </label>
+              <button class="button" type="button" id="refresh-button">Refresh</button>
+            </div>
+          </div>
+
+          <div class="metrics" aria-live="polite">
+            <article class="metric">
+              <p>Total</p>
+              <strong id="metric-total">0</strong>
+            </article>
+            <article class="metric">
+              <p>Visible</p>
+              <strong id="metric-visible">0</strong>
+            </article>
+            <article class="metric">
+              <p>Authors</p>
+              <strong id="metric-authors">0</strong>
+            </article>
+            <article class="metric">
+              <p>Tags</p>
+              <strong id="metric-tags">0</strong>
+            </article>
+          </div>
+
+          <ul class="project-list" id="project-list"></ul>
+        </section>
+      </section>
+    </main>
+
+    <BlogAdminScript />
+  </body>
+</html>
+
+
+

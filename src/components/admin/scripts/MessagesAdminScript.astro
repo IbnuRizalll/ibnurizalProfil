@@ -1,0 +1,556 @@
+    <script type="module" is:inline>
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+
+      const body = document.body
+      const statusEl = document.getElementById('status')
+      const appSection = document.getElementById('app-section')
+      const logoutButton = document.getElementById('logout-button')
+      const refreshButton = document.getElementById('refresh-button')
+      const searchInput = document.getElementById('search-input')
+      const messageList = document.getElementById('message-list')
+
+      const metricTotal = document.getElementById('metric-total')
+      const metricUnread = document.getElementById('metric-unread')
+      const metricReplyEmail = document.getElementById('metric-reply-email')
+      const metricReplyWhatsApp = document.getElementById('metric-reply-whatsapp')
+      const ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT = 20
+      const ADMIN_IDLE_TIMEOUT_MINUTES_MIN = 15
+      const ADMIN_IDLE_TIMEOUT_MINUTES_MAX = 30
+      const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
+      const ADMIN_ACTIVITY_THROTTLE_MS = 5000
+      const LIST_FETCH_LIMIT = 200
+      const SEARCH_DEBOUNCE_MS = 180
+
+      let supabase
+      let accessToken = ''
+      let allMessages = []
+      let idleTimeoutTimer = 0
+      let lastActivityAt = 0
+      let isSigningOutForTimeout = false
+      let stopSessionTimeoutGuard = () => {}
+
+      function getIdleTimeoutMinutes() {
+        const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+        if (!Number.isFinite(rawValue)) return ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT
+        return Math.min(ADMIN_IDLE_TIMEOUT_MINUTES_MAX, Math.max(ADMIN_IDLE_TIMEOUT_MINUTES_MIN, rawValue))
+      }
+
+      const ADMIN_IDLE_TIMEOUT_MS = getIdleTimeoutMinutes() * 60 * 1000
+
+      function setStatus(message, type = 'info') {
+        statusEl.textContent = message
+        statusEl.className = `status ${type}`
+      }
+
+      function clearIdleTimeoutTimer() {
+        if (idleTimeoutTimer) {
+          window.clearTimeout(idleTimeoutTimer)
+          idleTimeoutTimer = 0
+        }
+      }
+
+      function clearStoredAdminActivity() {
+        try {
+          window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY)
+        } catch {}
+      }
+
+      function readStoredActivity() {
+        try {
+          const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY)
+          if (!rawValue) return 0
+          const parsed = Number.parseInt(rawValue, 10)
+          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+        } catch {
+          return 0
+        }
+      }
+
+      function writeStoredActivity(timestamp) {
+        try {
+          window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(timestamp))
+        } catch {}
+      }
+
+      async function signOutByInactivity() {
+        if (isSigningOutForTimeout) return
+        isSigningOutForTimeout = true
+        stopSessionTimeoutGuard()
+        clearIdleTimeoutTimer()
+        setStatus(`Session expired after ${getIdleTimeoutMinutes()} minutes of inactivity. Please sign in again.`, 'info')
+
+        try {
+          await supabase.auth.signOut()
+        } catch {}
+
+        window.location.href = '/login?reason=timeout'
+      }
+
+      function scheduleIdleTimeout() {
+        clearIdleTimeoutTimer()
+        const now = Date.now()
+        const referenceActivityAt = Math.max(lastActivityAt, readStoredActivity())
+        const idleDurationMs = referenceActivityAt > 0 ? now - referenceActivityAt : 0
+        const remainingMs = ADMIN_IDLE_TIMEOUT_MS - idleDurationMs
+
+        if (remainingMs <= 0) {
+          void signOutByInactivity()
+          return
+        }
+
+        idleTimeoutTimer = window.setTimeout(() => {
+          void signOutByInactivity()
+        }, remainingMs + 250)
+      }
+
+      function noteActivity(force = false) {
+        const now = Date.now()
+        if (!force && now - lastActivityAt < ADMIN_ACTIVITY_THROTTLE_MS) {
+          return
+        }
+
+        lastActivityAt = now
+        writeStoredActivity(now)
+        scheduleIdleTimeout()
+      }
+
+      function startSessionTimeoutGuard() {
+        stopSessionTimeoutGuard()
+        const lightActivityListener = () => noteActivity(false)
+        const strongActivityListener = () => noteActivity(true)
+        const visibilityListener = () => {
+          if (document.visibilityState === 'visible') {
+            noteActivity(true)
+          }
+        }
+        const storageListener = (event) => {
+          if (event.key !== ADMIN_ACTIVITY_STORAGE_KEY) return
+          const nextValue = Number.parseInt(event.newValue || '', 10)
+          if (!Number.isFinite(nextValue) || nextValue <= 0) return
+          if (nextValue > lastActivityAt) {
+            lastActivityAt = nextValue
+            scheduleIdleTimeout()
+          }
+        }
+
+        window.addEventListener('pointerdown', strongActivityListener, { passive: true })
+        window.addEventListener('touchstart', strongActivityListener, { passive: true })
+        window.addEventListener('keydown', strongActivityListener)
+        window.addEventListener('mousemove', lightActivityListener, { passive: true })
+        window.addEventListener('scroll', lightActivityListener, { passive: true })
+        document.addEventListener('visibilitychange', visibilityListener)
+        window.addEventListener('storage', storageListener)
+
+        lastActivityAt = Math.max(Date.now(), readStoredActivity())
+        writeStoredActivity(lastActivityAt)
+        scheduleIdleTimeout()
+
+        stopSessionTimeoutGuard = () => {
+          clearIdleTimeoutTimer()
+          window.removeEventListener('pointerdown', strongActivityListener)
+          window.removeEventListener('touchstart', strongActivityListener)
+          window.removeEventListener('keydown', strongActivityListener)
+          window.removeEventListener('mousemove', lightActivityListener)
+          window.removeEventListener('scroll', lightActivityListener)
+          document.removeEventListener('visibilitychange', visibilityListener)
+          window.removeEventListener('storage', storageListener)
+        }
+      }
+
+      async function refreshAccessToken() {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+
+        if (error || !session?.access_token) {
+          throw new Error('Sesi login tidak valid. Silakan login ulang.')
+        }
+
+        accessToken = session.access_token
+        return accessToken
+      }
+
+      async function authorizedApiRequest(endpoint, init = {}) {
+        noteActivity(true)
+        const requestWithToken = async (token) => {
+          const headers = new Headers(init.headers || {})
+          headers.set('Authorization', `Bearer ${token}`)
+          const csrfTokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+          if (csrfTokenMatch?.[1]) {
+            headers.set('X-CSRF-Token', decodeURIComponent(csrfTokenMatch[1]))
+          }
+          return fetch(endpoint, {
+            ...init,
+            headers,
+          })
+        }
+
+        const currentToken = accessToken || (await refreshAccessToken())
+        let response = await requestWithToken(currentToken)
+
+        if (response.status === 401) {
+          const refreshedToken = await refreshAccessToken()
+          response = await requestWithToken(refreshedToken)
+        }
+
+        noteActivity(false)
+        return response
+      }
+
+      async function adminWrite(body) {
+        try {
+          const response = await authorizedApiRequest('/api/admin/supabase-write', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          })
+
+          let responseBody = null
+          try {
+            responseBody = await response.json()
+          } catch {
+            responseBody = null
+          }
+
+          if (!response.ok) {
+            return {
+              error: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Request gagal.',
+            }
+          }
+
+          return { error: null, data: responseBody?.data ?? null }
+        } catch (error) {
+          return {
+            error: error instanceof Error ? error.message : 'Request gagal.',
+          }
+        }
+      }
+
+      function formatDate(dateValue) {
+        if (!dateValue) return '-'
+        try {
+          return new Intl.DateTimeFormat('id-ID', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+          }).format(new Date(dateValue))
+        } catch {
+          return String(dateValue)
+        }
+      }
+
+      function debounce(callback, delayMs = 200) {
+        let timerId = 0
+        return (...args) => {
+          window.clearTimeout(timerId)
+          timerId = window.setTimeout(() => callback(...args), delayMs)
+        }
+      }
+
+      function normalizeWhatsAppNumber(value) {
+        const digits = String(value ?? '').replace(/\D/g, '')
+        if (!digits) return ''
+        if (digits.startsWith('0')) return `62${digits.slice(1)}`
+        if (digits.startsWith('62')) return digits
+        if (digits.startsWith('8')) return `62${digits}`
+        return digits
+      }
+
+      function buildWhatsAppUrl(value) {
+        const waNumber = normalizeWhatsAppNumber(value)
+        if (!waNumber) return ''
+        return `https://wa.me/${waNumber}`
+      }
+
+      function computeFilteredMessages() {
+        const term = searchInput.value.trim().toLowerCase()
+        if (!term) return allMessages
+
+        return allMessages.filter((message) => {
+          const bag = [message.full_name, message.email, message.phone, message.message, message.replied_via]
+            .join(' ')
+            .toLowerCase()
+
+          return bag.includes(term)
+        })
+      }
+
+      function updateMetrics(filteredMessages) {
+        const unreadCount = filteredMessages.filter((message) => !message.is_read).length
+        const repliedEmailCount = filteredMessages.filter((message) => message.replied_via === 'email').length
+        const repliedWhatsAppCount = filteredMessages.filter(
+          (message) => message.replied_via === 'whatsapp' || message.replied_via === 'phone',
+        ).length
+
+        metricTotal.textContent = String(allMessages.length)
+        metricUnread.textContent = String(unreadCount)
+        metricReplyEmail.textContent = String(repliedEmailCount)
+        metricReplyWhatsApp.textContent = String(repliedWhatsAppCount)
+      }
+
+      async function updateMessage(id, payload, successMessage) {
+        const { error } = await adminWrite({
+          table: 'contact_messages',
+          action: 'update',
+          payload: {
+            ...payload,
+            updated_at: new Date().toISOString(),
+          },
+          filters: [{ column: 'id', operator: 'eq', value: id }],
+        })
+
+        if (error) {
+          setStatus(error, 'error')
+          return
+        }
+
+        setStatus(successMessage, 'success')
+        await loadMessages()
+      }
+
+      async function deleteMessage(id, senderName = 'this sender') {
+        const { error } = await adminWrite({
+          table: 'contact_messages',
+          action: 'delete',
+          filters: [{ column: 'id', operator: 'eq', value: id }],
+        })
+
+        if (error) {
+          setStatus(error, 'error')
+          return
+        }
+
+        setStatus(`Message from ${senderName} deleted.`, 'success')
+        await loadMessages()
+      }
+
+      function renderMessages(messages) {
+        messageList.innerHTML = ''
+
+        if (!messages.length) {
+          const emptyItem = document.createElement('li')
+          emptyItem.className = 'empty-state muted'
+          emptyItem.textContent = searchInput.value.trim()
+            ? `Tidak ada pesan yang cocok dengan pencarian "${searchInput.value.trim()}".`
+            : 'Belum ada pesan masuk dari contact form.'
+          messageList.appendChild(emptyItem)
+          return
+        }
+
+        for (const message of messages) {
+          const li = document.createElement('li')
+          li.className = 'message-item'
+
+          const head = document.createElement('div')
+          head.className = 'message-head'
+
+          const titleWrap = document.createElement('div')
+          const title = document.createElement('h3')
+          title.textContent = message.full_name || 'Unknown sender'
+
+          const meta = document.createElement('p')
+          meta.className = 'message-meta'
+          meta.textContent = `${message.email} • WhatsApp: ${message.phone} • ${formatDate(message.created_at)}`
+          titleWrap.append(title, meta)
+
+          const badges = document.createElement('div')
+          badges.className = 'message-badges'
+
+          const readBadge = document.createElement('span')
+          readBadge.className = `badge ${message.is_read ? 'read' : 'unread'}`
+          readBadge.textContent = message.is_read ? 'Read' : 'Unread'
+          badges.append(readBadge)
+
+          if (message.replied_via === 'email') {
+            const repliedEmailBadge = document.createElement('span')
+            repliedEmailBadge.className = 'badge reply-email'
+            repliedEmailBadge.textContent = `Replied: Email (${formatDate(message.replied_at)})`
+            badges.append(repliedEmailBadge)
+          } else if (message.replied_via === 'whatsapp' || message.replied_via === 'phone') {
+            const repliedWhatsAppBadge = document.createElement('span')
+            repliedWhatsAppBadge.className = 'badge reply-whatsapp'
+            repliedWhatsAppBadge.textContent = `Replied: WhatsApp (${formatDate(message.replied_at)})`
+            badges.append(repliedWhatsAppBadge)
+          }
+
+          head.append(titleWrap, badges)
+
+          const bodyText = document.createElement('p')
+          bodyText.className = 'message-body'
+          bodyText.textContent = message.message || ''
+
+          const quickLinks = document.createElement('div')
+          quickLinks.className = 'quick-links'
+
+          const emailLink = document.createElement('a')
+          emailLink.className = 'quick-link'
+          emailLink.href = `mailto:${message.email}`
+          emailLink.target = '_blank'
+          emailLink.rel = 'noopener noreferrer'
+          emailLink.textContent = 'Open email'
+
+          const whatsAppLink = document.createElement('a')
+          whatsAppLink.className = 'quick-link'
+          whatsAppLink.target = '_blank'
+          whatsAppLink.rel = 'noopener noreferrer'
+          whatsAppLink.href = buildWhatsAppUrl(message.phone) || '#'
+          whatsAppLink.textContent = 'Open WhatsApp'
+          if (whatsAppLink.href.endsWith('/#')) {
+            whatsAppLink.removeAttribute('href')
+            whatsAppLink.textContent = 'WhatsApp number not valid'
+          }
+
+          quickLinks.append(emailLink, whatsAppLink)
+
+          const actions = document.createElement('div')
+          actions.className = 'message-actions'
+
+          const toggleReadButton = document.createElement('button')
+          toggleReadButton.type = 'button'
+          toggleReadButton.className = 'button small'
+          toggleReadButton.textContent = message.is_read ? 'Mark Unread' : 'Mark Read'
+          toggleReadButton.addEventListener('click', async () => {
+            await updateMessage(message.id, { is_read: !message.is_read }, message.is_read ? 'Marked as unread.' : 'Marked as read.')
+          })
+
+          const replyEmailButton = document.createElement('button')
+          replyEmailButton.type = 'button'
+          replyEmailButton.className = 'button small'
+          replyEmailButton.textContent = 'Reply via Email'
+          replyEmailButton.addEventListener('click', async () => {
+            await updateMessage(
+              message.id,
+              { is_read: true, replied_via: 'email', replied_at: new Date().toISOString() },
+              'Message marked replied via email.',
+            )
+          })
+
+          const replyWhatsAppButton = document.createElement('button')
+          replyWhatsAppButton.type = 'button'
+          replyWhatsAppButton.className = 'button small'
+          replyWhatsAppButton.textContent = 'Reply via WhatsApp'
+          replyWhatsAppButton.addEventListener('click', async () => {
+            await updateMessage(
+              message.id,
+              { is_read: true, replied_via: 'whatsapp', replied_at: new Date().toISOString() },
+              'Message marked replied via WhatsApp.',
+            )
+          })
+
+          const clearReplyButton = document.createElement('button')
+          clearReplyButton.type = 'button'
+          clearReplyButton.className = 'button small'
+          clearReplyButton.textContent = 'Clear Reply Status'
+          clearReplyButton.addEventListener('click', async () => {
+            await updateMessage(message.id, { replied_via: null, replied_at: null }, 'Reply status cleared.')
+          })
+
+          const deleteButton = document.createElement('button')
+          deleteButton.type = 'button'
+          deleteButton.className = 'button small'
+          deleteButton.textContent = 'Delete'
+          deleteButton.addEventListener('click', async () => {
+            const senderName = message.full_name || 'this sender'
+            const confirmed = window.confirm(`Delete message from ${senderName}? This action cannot be undone.`)
+            if (!confirmed) return
+            await deleteMessage(message.id, senderName)
+          })
+
+          actions.append(toggleReadButton, replyEmailButton, replyWhatsAppButton, clearReplyButton, deleteButton)
+          li.append(head, bodyText, quickLinks, actions)
+          messageList.appendChild(li)
+        }
+      }
+
+      async function loadMessages() {
+        const { data, error } = await supabase
+          .from('contact_messages')
+          .select('id, full_name, email, phone, message, is_read, replied_via, replied_at, created_at, updated_at')
+          .order('created_at', { ascending: false })
+          .limit(LIST_FETCH_LIMIT)
+
+        if (error) {
+          const normalizedMessage = String(error.message || '').toLowerCase()
+          if (normalizedMessage.includes('contact_messages')) {
+            setStatus(
+              'Tabel contact_messages belum tersedia. Jalankan SQL terbaru di supabase/schema.sql lalu refresh.',
+              'error',
+            )
+            return
+          }
+          setStatus(error.message, 'error')
+          return
+        }
+
+        allMessages = Array.isArray(data) ? data : []
+        const filteredMessages = computeFilteredMessages()
+        renderMessages(filteredMessages)
+        updateMetrics(filteredMessages)
+
+        if (allMessages.length >= LIST_FETCH_LIMIT) {
+          setStatus(`Loaded latest ${LIST_FETCH_LIMIT} messages to keep admin panel responsive.`, 'info')
+        }
+      }
+
+      async function initialize() {
+        const url = body.dataset.supabaseUrl || ''
+        const key = body.dataset.supabaseAnonKey || ''
+
+        if (!url || !key) {
+          setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
+          return
+        }
+
+        supabase = createClient(url, key)
+
+        logoutButton.addEventListener('click', async () => {
+          stopSessionTimeoutGuard()
+          clearStoredAdminActivity()
+          const { error } = await supabase.auth.signOut()
+          if (error) {
+            setStatus(error.message, 'error')
+            return
+          }
+          window.location.href = '/login'
+        })
+
+        refreshButton.addEventListener('click', loadMessages)
+        const runSearch = debounce(() => {
+          const filteredMessages = computeFilteredMessages()
+          renderMessages(filteredMessages)
+          updateMetrics(filteredMessages)
+        }, SEARCH_DEBOUNCE_MS)
+        searchInput.addEventListener('input', runSearch)
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session) {
+          window.location.href = '/login'
+          return
+        }
+
+        accessToken = session.access_token || ''
+        startSessionTimeoutGuard()
+        appSection.hidden = false
+        setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+        await loadMessages()
+
+        supabase.auth.onAuthStateChange((event, nextSession) => {
+          if (event === 'SIGNED_OUT') {
+            stopSessionTimeoutGuard()
+            window.location.href = '/login'
+            return
+          }
+          if (nextSession?.access_token) {
+            accessToken = nextSession.access_token
+            noteActivity(true)
+          }
+        })
+      }
+
+      initialize()
+    </script>

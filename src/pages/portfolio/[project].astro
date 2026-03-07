@@ -1,0 +1,232 @@
+---
+import DefaultLayout from '@layouts/DefaultLayout.astro'
+import PageHeader from '@components/PageHeader.astro'
+import SocialShares from '@components/SocialShares.astro'
+import { Heading } from 'accessible-astro-components'
+import { getProjectBySlug, type PortfolioContentBlock, type PortfolioProject } from '@utils/projects'
+
+const fallbackProjectImages = [
+  '/projects/project-image-1.png',
+  '/projects/project-image-2.png',
+  '/projects/project-image-3.png',
+  '/projects/project-image-4.png',
+  '/projects/project-image-5.png',
+  '/projects/project-image-6.png',
+]
+
+interface ResolvedProject extends PortfolioProject {
+  featuredImage: string
+}
+
+function getFallbackImageBySlug(rawSlug: string): string {
+  const normalized = String(rawSlug || '').trim()
+  if (!normalized) return fallbackProjectImages[0]
+  let hash = 0
+  for (const char of normalized) {
+    hash = (hash + char.charCodeAt(0)) % fallbackProjectImages.length
+  }
+  return fallbackProjectImages[hash]
+}
+
+const slug = (Astro.params.project || '').trim()
+const foundProject = await getProjectBySlug(slug)
+
+let project: ResolvedProject
+if (foundProject) {
+  project = {
+    ...foundProject,
+    featuredImage: foundProject.coverImageUrl || getFallbackImageBySlug(foundProject.slug),
+  }
+} else {
+  Astro.response.status = 404
+  project = {
+    id: 'not-found',
+    slug: slug || 'unknown-project',
+    title: 'Proyek tidak ditemukan',
+    author: 'Ibnu Rizal Mutaqim',
+    description: 'Project ini belum tersedia atau sudah dihapus.',
+    tags: [],
+    body: '',
+    coverImageUrl: null,
+    contentBlocks: [],
+    createdAt: null,
+    featuredImage: fallbackProjectImages[0],
+  }
+}
+
+const author = {
+  name: project.author,
+  image: project.featuredImage || '/projects/project-image-1.png',
+  bio: 'Project & Experience',
+}
+
+const fallbackParagraphBlocks: PortfolioContentBlock[] = project.body
+  ? project.body
+      .split(/\n{2,}/)
+      .map((paragraph) => paragraph.trim())
+      .filter(Boolean)
+      .map((text, index) => ({
+        id: `legacy-paragraph-${index + 1}`,
+        type: 'paragraph' as const,
+        text,
+      }))
+  : []
+
+const contentBlocks = project.contentBlocks.length > 0 ? project.contentBlocks : fallbackParagraphBlocks
+---
+
+<DefaultLayout title={project.title} description={project.description} url={`/portfolio/${project.slug}`}>
+  <PageHeader
+    title={project.title}
+    subtitle={project.description}
+    author={author}
+    bgType="bordered"
+    featuredImage={project.featuredImage}
+  />
+
+  <section class="my-10 md:my-12 article-wrap">
+    <article class="article-content container">
+      {
+        contentBlocks.length > 0 ? (
+          contentBlocks.map((block) =>
+            block.type === 'paragraph' ? (
+              <p>{block.text}</p>
+            ) : block.type === 'image' ? (
+              <figure>
+                <img src={block.url} alt={block.alt || ''} loading="lazy" decoding="async" />
+                {block.caption && <figcaption>{block.caption}</figcaption>}
+              </figure>
+            ) : (
+              <figure class="article-table-wrap">
+                {block.caption && <figcaption>{block.caption}</figcaption>}
+                <div class="article-table-scroll">
+                  <table>
+                    {
+                      block.headers.length > 0 && (
+                        <thead>
+                          <tr>
+                            {block.headers.map((header) => (
+                              <th scope="col">{header}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                      )
+                    }
+                    <tbody>
+                      {block.rows.map((row) => <tr>{row.map((cell) => <td>{cell}</td>)}</tr>)}
+                    </tbody>
+                  </table>
+                </div>
+              </figure>
+            ),
+          )
+        ) : (
+          <p>Detail proyek belum tersedia saat ini.</p>
+        )
+      }
+    </article>
+  </section>
+
+  <section class="my-10 md:my-12">
+    <div class="narrow space-content container">
+      <Heading level="h2">Connect on Social Media</Heading>
+      <p>Temukan profil resmi saya di platform sosial berikut.</p>
+      <SocialShares />
+    </div>
+  </section>
+</DefaultLayout>
+
+<style lang="scss" is:global>
+  .narrow {
+    margin-inline: auto;
+    max-width: 65ch;
+  }
+
+  .article-wrap .article-content {
+    margin-inline: auto;
+    max-width: 74ch;
+    min-inline-size: 0;
+  }
+
+  .article-wrap .article-content > * + * {
+    margin-top: clamp(0.95rem, 2vw, 1.2rem);
+  }
+
+  .article-wrap p {
+    line-height: 1.8;
+    font-size: clamp(1rem, 1.2vw, 1.1rem);
+    text-wrap: pretty;
+    overflow-wrap: anywhere;
+  }
+
+  .article-wrap figure {
+    margin: 0;
+    border: 1px solid var(--border-color-subtle);
+    border-radius: var(--radius-l);
+    background: color-mix(in oklab, var(--background-color) 88%, var(--color-primary-100));
+    padding: clamp(0.65rem, 1.8vw, 0.9rem);
+  }
+
+  .article-wrap figure img {
+    display: block;
+    border-radius: calc(var(--radius-l) - 6px);
+    width: 100%;
+    height: auto;
+    object-fit: cover;
+  }
+
+  .article-wrap figcaption {
+    margin-top: 0.52rem;
+    color: color-mix(in oklab, var(--text-color) 75%, transparent);
+    font-size: 0.92rem;
+  }
+
+  .article-wrap .article-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .article-wrap table {
+    border-collapse: collapse;
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .article-wrap th,
+  .article-wrap td {
+    min-width: clamp(6.5rem, 12vw, 9.5rem);
+    max-width: 16rem;
+    border: 1px solid var(--border-color-subtle);
+    padding: clamp(0.48rem, 1.35vw, 0.62rem) clamp(0.52rem, 1.4vw, 0.68rem);
+    text-align: left;
+    vertical-align: top;
+    font-size: clamp(0.82rem, 1vw, 0.98rem);
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+    line-height: 1.45;
+    hyphens: auto;
+  }
+
+  .article-wrap th {
+    background: color-mix(in oklab, var(--color-primary-200) 38%, transparent);
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+
+  @media (max-width: 760px) {
+    .article-wrap .article-content {
+      max-width: 100%;
+    }
+
+    .article-wrap th,
+    .article-wrap td {
+      min-width: 6rem;
+      max-width: 10.5rem;
+      padding: 0.45rem 0.5rem;
+      font-size: 0.84rem;
+      line-height: 1.38;
+    }
+  }
+</style>

@@ -1,0 +1,552 @@
+<script type="module" is:inline>
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+
+  const body = document.body
+  const statusEl = document.getElementById('status')
+  const appSection = document.getElementById('app-section')
+  const logoutButton = document.getElementById('logout-button')
+  const refreshScanButton = document.getElementById('refresh-scan-button')
+  const deleteSelectedButton = document.getElementById('delete-selected-button')
+  const deleteAllButton = document.getElementById('delete-all-button')
+  const selectAllCheckbox = document.getElementById('select-all-checkbox')
+  const searchInput = document.getElementById('search-input')
+  const orphanList = document.getElementById('orphan-list')
+
+  const metricTotal = document.getElementById('metric-total')
+  const metricReferenced = document.getElementById('metric-referenced')
+  const metricOrphan = document.getElementById('metric-orphan')
+  const metricTotalSize = document.getElementById('metric-total-size')
+  const metricOrphanSize = document.getElementById('metric-orphan-size')
+
+  const ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT = 20
+  const ADMIN_IDLE_TIMEOUT_MINUTES_MIN = 15
+  const ADMIN_IDLE_TIMEOUT_MINUTES_MAX = 30
+  const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
+  const ADMIN_ACTIVITY_THROTTLE_MS = 5000
+
+  let supabase
+  let accessToken = ''
+  let isBusy = false
+  let idleTimeoutTimer = 0
+  let lastActivityAt = 0
+  let isSigningOutForTimeout = false
+  let stopSessionTimeoutGuard = () => {}
+  let allOrphans = []
+  let summary = {
+    totalObjects: 0,
+    referencedObjects: 0,
+    orphanObjects: 0,
+    totalStorageBytes: 0,
+    orphanBytes: 0,
+  }
+  const selectedPaths = new Set()
+
+  function setStatus(message, type = 'info') {
+    statusEl.textContent = message
+    statusEl.className = `status ${type}`
+  }
+
+  function getIdleTimeoutMinutes() {
+    const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+    if (!Number.isFinite(rawValue)) return ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT
+    return Math.min(ADMIN_IDLE_TIMEOUT_MINUTES_MAX, Math.max(ADMIN_IDLE_TIMEOUT_MINUTES_MIN, rawValue))
+  }
+
+  const ADMIN_IDLE_TIMEOUT_MS = getIdleTimeoutMinutes() * 60 * 1000
+
+  function clearIdleTimeoutTimer() {
+    if (idleTimeoutTimer) {
+      window.clearTimeout(idleTimeoutTimer)
+      idleTimeoutTimer = 0
+    }
+  }
+
+  function clearStoredAdminActivity() {
+    try {
+      window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY)
+    } catch {}
+  }
+
+  function readStoredActivity() {
+    try {
+      const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY)
+      if (!rawValue) return 0
+      const parsed = Number.parseInt(rawValue, 10)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    } catch {
+      return 0
+    }
+  }
+
+  function writeStoredActivity(timestamp) {
+    try {
+      window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(timestamp))
+    } catch {}
+  }
+
+  async function signOutByInactivity() {
+    if (isSigningOutForTimeout) return
+    isSigningOutForTimeout = true
+    stopSessionTimeoutGuard()
+    clearIdleTimeoutTimer()
+    setStatus(`Session expired after ${getIdleTimeoutMinutes()} minutes of inactivity. Please sign in again.`, 'info')
+
+    try {
+      await supabase.auth.signOut()
+    } catch {}
+
+    window.location.href = '/login?reason=timeout'
+  }
+
+  function scheduleIdleTimeout() {
+    clearIdleTimeoutTimer()
+    const now = Date.now()
+    const referenceActivityAt = Math.max(lastActivityAt, readStoredActivity())
+    const idleDurationMs = referenceActivityAt > 0 ? now - referenceActivityAt : 0
+    const remainingMs = ADMIN_IDLE_TIMEOUT_MS - idleDurationMs
+
+    if (remainingMs <= 0) {
+      void signOutByInactivity()
+      return
+    }
+
+    idleTimeoutTimer = window.setTimeout(() => {
+      void signOutByInactivity()
+    }, remainingMs + 250)
+  }
+
+  function noteActivity(force = false) {
+    const now = Date.now()
+    if (!force && now - lastActivityAt < ADMIN_ACTIVITY_THROTTLE_MS) {
+      return
+    }
+
+    lastActivityAt = now
+    writeStoredActivity(now)
+    scheduleIdleTimeout()
+  }
+
+  function startSessionTimeoutGuard() {
+    stopSessionTimeoutGuard()
+    const lightActivityListener = () => noteActivity(false)
+    const strongActivityListener = () => noteActivity(true)
+    const visibilityListener = () => {
+      if (document.visibilityState === 'visible') {
+        noteActivity(true)
+      }
+    }
+    const storageListener = (event) => {
+      if (event.key !== ADMIN_ACTIVITY_STORAGE_KEY) return
+      const nextValue = Number.parseInt(event.newValue || '', 10)
+      if (!Number.isFinite(nextValue) || nextValue <= 0) return
+      if (nextValue > lastActivityAt) {
+        lastActivityAt = nextValue
+        scheduleIdleTimeout()
+      }
+    }
+
+    window.addEventListener('pointerdown', strongActivityListener, { passive: true })
+    window.addEventListener('touchstart', strongActivityListener, { passive: true })
+    window.addEventListener('keydown', strongActivityListener)
+    window.addEventListener('mousemove', lightActivityListener, { passive: true })
+    window.addEventListener('scroll', lightActivityListener, { passive: true })
+    document.addEventListener('visibilitychange', visibilityListener)
+    window.addEventListener('storage', storageListener)
+
+    lastActivityAt = Math.max(Date.now(), readStoredActivity())
+    writeStoredActivity(lastActivityAt)
+    scheduleIdleTimeout()
+
+    stopSessionTimeoutGuard = () => {
+      clearIdleTimeoutTimer()
+      window.removeEventListener('pointerdown', strongActivityListener)
+      window.removeEventListener('touchstart', strongActivityListener)
+      window.removeEventListener('keydown', strongActivityListener)
+      window.removeEventListener('mousemove', lightActivityListener)
+      window.removeEventListener('scroll', lightActivityListener)
+      document.removeEventListener('visibilitychange', visibilityListener)
+      window.removeEventListener('storage', storageListener)
+    }
+  }
+
+  function formatBytes(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB']
+    const unitIndex = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+    const value = bytes / 1024 ** unitIndex
+    return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+  }
+
+  function formatDate(value) {
+    if (!value) return '-'
+    try {
+      return new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(value))
+    } catch {
+      return String(value)
+    }
+  }
+
+  function setBusy(nextBusy) {
+    isBusy = nextBusy
+    refreshScanButton.disabled = nextBusy
+    deleteAllButton.disabled = nextBusy || allOrphans.length === 0
+    updateSelectionUi()
+  }
+
+  function computeFilteredOrphans() {
+    const term = searchInput.value.trim().toLowerCase()
+    if (!term) return allOrphans
+    return allOrphans.filter((entry) => String(entry.path || '').toLowerCase().includes(term))
+  }
+
+  function updateMetrics() {
+    metricTotal.textContent = String(summary.totalObjects || 0)
+    metricReferenced.textContent = String(summary.referencedObjects || 0)
+    metricOrphan.textContent = String(summary.orphanObjects || 0)
+    metricTotalSize.textContent = formatBytes(summary.totalStorageBytes || 0)
+    metricOrphanSize.textContent = formatBytes(summary.orphanBytes || 0)
+  }
+
+  function updateSelectionUi() {
+    const filteredOrphans = computeFilteredOrphans()
+    const selectedInFiltered = filteredOrphans.filter((entry) => selectedPaths.has(entry.path)).length
+    const selectableCount = filteredOrphans.length
+    const selectedCount = selectedPaths.size
+
+    deleteSelectedButton.disabled = isBusy || selectedCount === 0
+    deleteSelectedButton.textContent =
+      selectedCount > 0 ? `Delete Selected (${selectedCount})` : 'Delete Selected'
+
+    if (selectableCount === 0) {
+      selectAllCheckbox.checked = false
+      selectAllCheckbox.indeterminate = false
+      selectAllCheckbox.disabled = true
+      return
+    }
+
+    selectAllCheckbox.disabled = isBusy
+    selectAllCheckbox.checked = selectedInFiltered === selectableCount
+    selectAllCheckbox.indeterminate = selectedInFiltered > 0 && selectedInFiltered < selectableCount
+  }
+
+  function renderOrphans() {
+    const filtered = computeFilteredOrphans()
+    orphanList.innerHTML = ''
+
+    if (filtered.length === 0) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state muted'
+      emptyItem.textContent = searchInput.value.trim()
+        ? `No orphan file matches "${searchInput.value.trim()}".`
+        : 'No orphan files found in this bucket.'
+      orphanList.appendChild(emptyItem)
+      updateSelectionUi()
+      return
+    }
+
+    for (const orphan of filtered) {
+      const item = document.createElement('li')
+      item.className = 'orphan-item'
+
+      const top = document.createElement('div')
+      top.className = 'orphan-top'
+
+      const check = document.createElement('input')
+      check.type = 'checkbox'
+      check.className = 'orphan-check'
+      check.checked = selectedPaths.has(orphan.path)
+      check.addEventListener('change', () => {
+        if (check.checked) {
+          selectedPaths.add(orphan.path)
+        } else {
+          selectedPaths.delete(orphan.path)
+        }
+        updateSelectionUi()
+      })
+
+      const pathCode = document.createElement('code')
+      pathCode.className = 'orphan-path'
+      pathCode.textContent = orphan.path
+
+      top.append(check, pathCode)
+
+      const meta = document.createElement('p')
+      meta.className = 'orphan-meta'
+      meta.textContent = `size: ${formatBytes(orphan.sizeBytes || 0)} | updated: ${formatDate(orphan.updatedAt || orphan.createdAt)}`
+
+      item.append(top, meta)
+      orphanList.appendChild(item)
+    }
+
+    updateSelectionUi()
+  }
+
+  async function refreshAccessToken() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession()
+
+    if (error || !session?.access_token) {
+      throw new Error('Sesi login tidak valid. Silakan login ulang.')
+    }
+
+    accessToken = session.access_token
+    return accessToken
+  }
+
+  async function authorizedApiRequest(endpoint, init = {}) {
+    noteActivity(true)
+    const requestWithToken = async (token) => {
+      const headers = new Headers(init.headers || {})
+      headers.set('Authorization', `Bearer ${token}`)
+      const csrfTokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+      if (csrfTokenMatch?.[1]) {
+        headers.set('X-CSRF-Token', decodeURIComponent(csrfTokenMatch[1]))
+      }
+      return fetch(endpoint, {
+        ...init,
+        headers,
+      })
+    }
+
+    const currentToken = accessToken || (await refreshAccessToken())
+    let response = await requestWithToken(currentToken)
+
+    if (response.status === 401) {
+      const refreshedToken = await refreshAccessToken()
+      response = await requestWithToken(refreshedToken)
+    }
+
+    noteActivity(false)
+    return response
+  }
+
+  async function requestOrphanApi(bodyPayload) {
+    const response = await authorizedApiRequest('/api/admin/orphan-assets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bodyPayload),
+    })
+
+    let responseBody = null
+    try {
+      responseBody = await response.json()
+    } catch {
+      responseBody = null
+    }
+
+    return {
+      ok: response.ok,
+      status: response.status,
+      body: responseBody,
+    }
+  }
+
+  async function scanOrphans(silent = false) {
+    setBusy(true)
+    if (!silent) {
+      setStatus('Scanning bucket and comparing references in database...', 'info')
+    }
+
+    try {
+      const result = await requestOrphanApi({ action: 'scan' })
+      if (!result.ok) {
+        setStatus(result.body?.error || 'Failed to scan orphan files.', 'error')
+        return false
+      }
+
+      allOrphans = Array.isArray(result.body?.orphans) ? result.body.orphans : []
+      summary = {
+        ...summary,
+        ...(result.body?.summary || {}),
+      }
+
+      const validPaths = new Set(allOrphans.map((entry) => entry.path))
+      for (const selectedPath of [...selectedPaths]) {
+        if (!validPaths.has(selectedPath)) {
+          selectedPaths.delete(selectedPath)
+        }
+      }
+
+      updateMetrics()
+      renderOrphans()
+
+      if (!silent) {
+        const truncatedText = result.body?.truncated
+          ? ` Showing first ${allOrphans.length} results.`
+          : ''
+        setStatus(
+          `Scan complete. ${summary.orphanObjects || 0} orphan file(s) found in bucket "${result.body?.bucket || ''}".${truncatedText}`.trim(),
+          'success',
+        )
+      }
+
+      return true
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Failed to scan orphan files.', 'error')
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteOrphans(paths, label = 'selected') {
+    if (!Array.isArray(paths) || paths.length === 0) {
+      setStatus('No orphan file selected for delete.', 'error')
+      return
+    }
+
+    setBusy(true)
+    setStatus(`Deleting ${paths.length} ${label} orphan file(s)...`, 'info')
+
+    try {
+      const result = await requestOrphanApi({
+        action: 'delete',
+        paths,
+      })
+
+      if (!result.ok && result.status !== 207) {
+        setStatus(result.body?.error || 'Delete request failed.', 'error')
+        return
+      }
+
+      const deletedCount = Number(result.body?.deletedCount || 0)
+      const failedCount = Array.isArray(result.body?.failed) ? result.body.failed.length : 0
+      const skippedReferencedCount = Array.isArray(result.body?.skippedReferenced) ? result.body.skippedReferenced.length : 0
+
+      selectedPaths.clear()
+      await scanOrphans(true)
+
+      if (failedCount > 0) {
+        setStatus(
+          `Delete finished with partial result. Deleted ${deletedCount}, failed ${failedCount}, skipped referenced ${skippedReferencedCount}.`,
+          'error',
+        )
+        return
+      }
+
+      setStatus(`Delete completed. Deleted ${deletedCount} orphan file(s).`, 'success')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Delete request failed.', 'error')
+    } finally {
+      setBusy(false)
+      updateSelectionUi()
+    }
+  }
+
+  function attachEvents() {
+    refreshScanButton.addEventListener('click', () => {
+      noteActivity(true)
+      void scanOrphans(false)
+    })
+
+    searchInput.addEventListener('input', () => {
+      noteActivity(false)
+      renderOrphans()
+    })
+
+    selectAllCheckbox.addEventListener('change', () => {
+      noteActivity(true)
+      const filtered = computeFilteredOrphans()
+      if (selectAllCheckbox.checked) {
+        for (const orphan of filtered) {
+          selectedPaths.add(orphan.path)
+        }
+      } else {
+        for (const orphan of filtered) {
+          selectedPaths.delete(orphan.path)
+        }
+      }
+      renderOrphans()
+    })
+
+    deleteSelectedButton.addEventListener('click', async () => {
+      noteActivity(true)
+      const candidates = [...selectedPaths]
+      if (candidates.length === 0) {
+        setStatus('No orphan file selected for delete.', 'error')
+        return
+      }
+
+      const confirmed = window.confirm(`Delete ${candidates.length} selected orphan file(s)? This action cannot be undone.`)
+      if (!confirmed) return
+      await deleteOrphans(candidates, 'selected')
+    })
+
+    deleteAllButton.addEventListener('click', async () => {
+      noteActivity(true)
+      if (allOrphans.length === 0) {
+        setStatus('No orphan file to delete.', 'info')
+        return
+      }
+
+      const confirmed = window.confirm(
+        `Delete ALL ${allOrphans.length} orphan file(s) in bucket "${body.dataset.supabaseAssetsBucket || 'site-assets'}"? This action cannot be undone.`,
+      )
+      if (!confirmed) return
+      await deleteOrphans(allOrphans.map((entry) => entry.path), 'orphan')
+    })
+  }
+
+  async function initialize() {
+    const url = body.dataset.supabaseUrl || ''
+    const key = body.dataset.supabaseAnonKey || ''
+
+    if (!url || !key) {
+      setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
+      return
+    }
+
+    supabase = createClient(url, key)
+
+    logoutButton.addEventListener('click', async () => {
+      stopSessionTimeoutGuard()
+      clearStoredAdminActivity()
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        setStatus(error.message, 'error')
+        return
+      }
+      window.location.href = '/login'
+    })
+
+    attachEvents()
+    updateMetrics()
+    renderOrphans()
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) {
+      window.location.href = '/login'
+      return
+    }
+
+    accessToken = session.access_token || ''
+    startSessionTimeoutGuard()
+    appSection.hidden = false
+    setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+    await scanOrphans(true)
+
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_OUT') {
+        stopSessionTimeoutGuard()
+        window.location.href = '/login'
+        return
+      }
+      if (nextSession?.access_token) {
+        accessToken = nextSession.access_token
+        noteActivity(true)
+      }
+    })
+  }
+
+  initialize()
+</script>

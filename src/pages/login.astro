@@ -1,0 +1,446 @@
+﻿---
+import themeConfig from '@theme-config'
+
+const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL ?? ''
+const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Sign In</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style
+      define:vars={{
+        brandPrimary: themeConfig.colors.primary,
+        brandSecondary: themeConfig.colors.secondary,
+        brandNeutral: themeConfig.colors.neutral,
+        brandOutline: themeConfig.colors.outline,
+      }}
+    >
+      :root {
+        color-scheme: light dark;
+        --brand-primary: var(--brandPrimary);
+        --brand-secondary: var(--brandSecondary);
+        --brand-neutral: var(--brandNeutral);
+        --brand-outline: var(--brandOutline);
+        --text-color: light-dark(#1f2530, #f7f8fa);
+        --surface: light-dark(rgba(255, 255, 255, 0.76), rgba(22, 26, 31, 0.88));
+        --surface-soft: light-dark(rgba(247, 249, 252, 0.88), rgba(35, 39, 45, 0.9));
+        --border-soft: light-dark(rgba(31, 37, 48, 0.14), rgba(244, 247, 250, 0.14));
+        --status-info: #2f6fd8;
+        --status-success: #16803d;
+        --status-error: #b42318;
+        --shadow-lg: 0 24px 54px rgba(7, 12, 18, 0.16);
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(
+            circle at 10% -10%,
+            color-mix(in oklab, var(--brand-primary) 36%, transparent),
+            transparent 40%
+          ),
+          radial-gradient(
+            circle at 100% 0,
+            color-mix(in oklab, var(--brand-secondary) 30%, transparent),
+            transparent 35%
+          ),
+          linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
+        min-height: 100vh;
+        color: var(--text-color);
+        line-height: 1.6;
+        overflow-x: hidden;
+        font-family:
+          Atkinson Hyperlegible,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+      }
+
+      body::before {
+        position: fixed;
+        opacity: 0.25;
+        inset: 0;
+        background-image:
+          linear-gradient(to right, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px),
+          linear-gradient(to bottom, color-mix(in oklab, var(--brand-neutral) 30%, transparent) 1px, transparent 1px);
+        background-size: 24px 24px;
+        pointer-events: none;
+        content: '';
+      }
+
+      .login-shell {
+        display: grid;
+        align-items: center;
+        margin-inline: auto;
+        padding: clamp(1rem, 3vw, 2rem);
+        max-width: 1100px;
+        min-height: 100vh;
+      }
+
+      .login-layout {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .hero {
+        position: relative;
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-soft);
+        border-radius: clamp(14px, 2.8vw, 20px);
+        background: var(--surface-soft);
+        padding: clamp(1rem, 3vw, 1.6rem);
+      }
+
+      .hero .eyebrow {
+        margin: 0;
+        color: color-mix(in oklab, var(--text-color) 70%, transparent);
+        font-weight: 700;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .hero h1 {
+        margin: 0.4rem 0 0.5rem;
+        font-size: clamp(1.7rem, 4vw, 2.3rem);
+        line-height: 1.15;
+      }
+
+      .hero p {
+        margin: 0;
+        max-width: 60ch;
+        color: color-mix(in oklab, var(--text-color) 80%, transparent);
+      }
+
+      .card {
+        backdrop-filter: blur(10px);
+        box-shadow: var(--shadow-lg);
+        border: 1px solid var(--border-soft);
+        border-radius: clamp(14px, 2.8vw, 20px);
+        background: var(--surface);
+        padding: clamp(1rem, 3vw, 1.4rem);
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+
+      input,
+      button {
+        font: inherit;
+      }
+
+      .field {
+        margin-bottom: 1rem;
+      }
+
+      .field:last-of-type {
+        margin-bottom: 0.7rem;
+      }
+
+      .input-wrap {
+        position: relative;
+      }
+
+      input {
+        transition:
+          border-color 140ms ease,
+          box-shadow 180ms ease,
+          transform 140ms ease;
+        box-sizing: border-box;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface) 82%, transparent);
+        padding: 0.72rem 0.86rem;
+        width: 100%;
+        color: var(--text-color);
+      }
+
+      input:focus-visible {
+        outline: 2px solid transparent;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand-outline) 28%, transparent);
+        border-color: color-mix(in oklab, var(--brand-outline) 70%, transparent);
+      }
+
+      .input-wrap.with-action input {
+        padding-right: 6.5rem;
+      }
+
+      .input-action {
+        position: absolute;
+        margin: 0;
+        inset-block: 0.32rem;
+        inset-inline-end: 0.34rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 9px;
+        background: color-mix(in oklab, var(--surface-soft) 88%, transparent);
+        padding: 0.25rem 0.55rem;
+        min-width: 5.4rem;
+        font-size: 0.85rem;
+      }
+
+      button {
+        transition:
+          transform 140ms ease,
+          border-color 140ms ease,
+          box-shadow 200ms ease,
+          background-color 160ms ease;
+        cursor: pointer;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 80%, transparent);
+        padding: 0.65rem 0.9rem;
+        color: var(--text-color);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in oklab, var(--brand-primary) 35%, var(--border-soft));
+        background: color-mix(in oklab, var(--surface-soft) 60%, var(--brand-primary) 15%);
+      }
+
+      button:focus-visible {
+        outline: 2px solid transparent;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--brand-outline) 28%, transparent);
+      }
+
+      .login-button {
+        width: 100%;
+        font-weight: 700;
+      }
+
+      .login-button[disabled] {
+        transform: none;
+        opacity: 0.66;
+        cursor: not-allowed;
+      }
+
+      .status {
+        margin: 0 0 1rem;
+        border: 1px solid var(--border-soft);
+        border-radius: 12px;
+        background: color-mix(in oklab, var(--surface-soft) 85%, transparent);
+        padding: 0.72rem 0.85rem;
+      }
+
+      .status.info {
+        border-color: color-mix(in oklab, var(--status-info) 52%, var(--border-soft));
+      }
+
+      .status.success {
+        border-color: color-mix(in oklab, var(--status-success) 52%, var(--border-soft));
+      }
+
+      .status.error {
+        border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
+      }
+
+      .card-head {
+        margin-bottom: 0.8rem;
+      }
+
+      .card-head h2 {
+        margin: 0;
+        line-height: 1.2;
+      }
+
+      .card-head p {
+        margin: 0.25rem 0 0;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.95rem;
+      }
+
+      .helper {
+        margin-top: 1rem;
+        color: color-mix(in oklab, var(--text-color) 74%, transparent);
+        font-size: 0.9rem;
+      }
+
+      .helper code {
+        font-size: 0.85em;
+      }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-top: 1rem;
+        color: inherit;
+        text-decoration-color: color-mix(in oklab, var(--brand-secondary) 45%, transparent);
+        text-underline-offset: 0.2rem;
+      }
+
+      .back-link:hover {
+        text-decoration-color: color-mix(in oklab, var(--brand-secondary) 80%, transparent);
+      }
+
+      @media (min-width: 900px) {
+        .login-layout {
+          grid-template-columns: 1.1fr minmax(340px, 420px);
+          align-items: stretch;
+        }
+
+        .hero {
+          padding: 2rem;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .input-wrap.with-action input {
+          padding-right: 5.6rem;
+        }
+
+        .input-action {
+          min-width: 4.8rem;
+          font-size: 0.78rem;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition-duration: 0ms !important;
+          scroll-behavior: auto !important;
+        }
+      }
+    </style>
+  </head>
+  <body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+    <main class="login-shell">
+      <div class="login-layout">
+        <section class="hero" aria-labelledby="admin-intro">
+          <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
+          <h1 id="admin-intro">Area terbatas untuk pengelolaan konten.</h1>
+          <p>
+            Halaman ini hanya untuk pengguna yang memiliki akses resmi.
+          </p>
+          <a class="back-link" href="/">Kembali ke website</a>
+        </section>
+
+        <section class="card" aria-labelledby="login-title">
+          <div class="card-head">
+            <h2 id="login-title">Sign In</h2>
+            <p>Masuk menggunakan akun yang sudah memiliki hak akses.</p>
+          </div>
+
+          <div class="status info" id="status" role="status" aria-live="polite">Initializing...</div>
+
+          <form id="login-form">
+            <div class="field">
+              <label for="email">Email</label>
+              <div class="input-wrap">
+                <input id="email" type="email" autocomplete="email" required />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="password">Password</label>
+              <div class="input-wrap with-action">
+                <input id="password" type="password" autocomplete="current-password" required />
+                <button id="toggle-password" class="input-action" type="button" aria-pressed="false">Show</button>
+              </div>
+            </div>
+
+            <button class="login-button" id="login-button" type="submit">Sign in</button>
+          </form>
+
+          <p class="helper">Akses terbatas hanya untuk pengguna terotorisasi.</p>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" is:inline>
+      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+
+      const body = document.body
+      const statusEl = document.getElementById('status')
+      const loginForm = document.getElementById('login-form')
+      const loginButton = document.getElementById('login-button')
+      const emailInput = document.getElementById('email')
+      const passwordInput = document.getElementById('password')
+      const togglePasswordButton = document.getElementById('toggle-password')
+
+      function setStatus(message, type = 'info') {
+        statusEl.textContent = message
+        statusEl.className = `status ${type}`
+      }
+
+      async function initialize() {
+        const url = body.dataset.supabaseUrl || ''
+        const key = body.dataset.supabaseAnonKey || ''
+
+        if (!url || !key) {
+          setStatus('Layanan autentikasi belum tersedia saat ini.', 'error')
+          return
+        }
+
+        const supabase = createClient(url, key)
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (session) {
+          window.location.href = '/admin/about'
+          return
+        }
+
+        const reason = new URLSearchParams(window.location.search).get('reason')
+        if (reason === 'timeout') {
+          setStatus('Session ended because of inactivity. Please sign in again.', 'info')
+        } else {
+          setStatus('Silakan masuk untuk melanjutkan.', 'info')
+        }
+
+        togglePasswordButton.addEventListener('click', () => {
+          const isHidden = passwordInput.type === 'password'
+          passwordInput.type = isHidden ? 'text' : 'password'
+          togglePasswordButton.textContent = isHidden ? 'Hide' : 'Show'
+          togglePasswordButton.setAttribute('aria-pressed', String(isHidden))
+        })
+
+        loginForm.addEventListener('submit', async (event) => {
+          event.preventDefault()
+
+          const email = emailInput.value.trim()
+          const password = passwordInput.value
+
+          if (!email || !password) {
+            setStatus('Email dan password wajib diisi.', 'error')
+            return
+          }
+
+          loginButton.disabled = true
+          setStatus('Memproses sign in...', 'info')
+
+          const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+          loginButton.disabled = false
+
+          if (error) {
+            setStatus('Email atau password tidak valid.', 'error')
+            return
+          }
+
+          setStatus('Berhasil masuk. Mengalihkan halaman...', 'success')
+          window.location.href = '/admin/about'
+        })
+      }
+
+      initialize()
+    </script>
+  </body>
+</html>
+

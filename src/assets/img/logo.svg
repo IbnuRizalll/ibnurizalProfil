@@ -1,0 +1,21 @@
+<svg width="47" height="37" viewBox="0 0 47 37" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="irmGradient" x1="1" y1="1" x2="46" y2="36" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00D1B7" />
+      <stop offset="1" stop-color="#D648FF" />
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="45" height="35" rx="10" fill="url(#irmGradient)" />
+  <rect x="1" y="1" width="45" height="35" rx="10" stroke="#1F2530" stroke-opacity="0.24" />
+  <text
+    x="23.5"
+    y="23"
+    text-anchor="middle"
+    font-size="12"
+    font-family="Atkinson Hyperlegible, Arial, sans-serif"
+    font-weight="700"
+    fill="#0F172A"
+  >
+    IRM
+  </text>
+</svg>

@@ -1,0 +1,294 @@
+﻿---
+import { Link } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+
+/**
+ * Hero Component
+ *
+ * @description A component that displays a hero section with a title, description, and image
+ */
+interface Props {
+  /**
+   * The source URL for the image
+   */
+  src?: string
+  /**
+   * Optional description shown below the title
+   */
+  description?: string
+}
+
+const {
+  src = '/astronaut-hero-img.webp',
+  description = 'Saya Ibnu Rizal Mutaqim, seorang developer yang berfokus membangun website cepat, rapi, dan mudah dikelola.',
+}: Props = Astro.props
+---
+
+<section class="hero my-14 md:my-20 lg:my-24">
+  <div class="container">
+    <div class="grid grid-cols-1 items-center gap-12 md:gap-16 lg:grid-cols-2 lg:gap-24">
+      <div class="flex flex-col items-center gap-6 md:items-start md:gap-8">
+        <h1 class="text-center text-[clamp(2.2rem,11vw,4.8rem)] leading-[1.05] md:text-left lg:text-[clamp(3.9rem,6.5vw,5.9rem)]">
+          <slot><span class="text-gradient">Ibnu Rizal</span> Mutaqim</slot>
+        </h1>
+        <p class="max-w-prose text-center text-base sm:text-lg md:text-left md:text-xl">{description}</p>
+        <div class="hero-actions flex w-full flex-col gap-3 min-[500px]:w-auto min-[500px]:flex-row">
+          <Link href="/portfolio" class="hero-cta" isButton type="primary" animateOnHover animationType="boop">
+            <Icon aria-hidden="true" name="lucide:briefcase-business" size="1.5rem" />
+            View Portfolio
+          </Link>
+          <Link href="/contact" class="hero-cta" isButton type="secondary" animateOnHover animationType="boop">
+            <Icon aria-hidden="true" name="lucide:message-circle" size="1.5rem" />
+            Contact Me
+          </Link>
+        </div>
+      </div>
+      <div class="hero-photo-wrap flex">
+        <div class="hero-photo-frame" data-hero-photo data-max-distance="320">
+          <img
+            class="hero-photo"
+            src={src}
+            alt="Foto profil Ibnu Rizal Mutaqim"
+            decoding="async"
+            width="800"
+            height="600"
+            loading="eager"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { animate, stagger, splitText } from 'animejs'
+
+  declare global {
+    interface Window {
+      __heroPhotoCleanup?: (() => void) | undefined
+      __heroGreetingCleanup?: (() => void) | undefined
+    }
+  }
+
+  const initHeroGreeting = () => {
+    if (typeof window === 'undefined') return
+
+    if (typeof window.__heroGreetingCleanup === 'function') {
+      window.__heroGreetingCleanup()
+      window.__heroGreetingCleanup = undefined
+    }
+
+    const greetingElement = document.querySelector<HTMLElement>('[data-hero-greeting]')
+    if (!greetingElement) return
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const split = splitText(greetingElement, { words: false, chars: true })
+    const chars = Array.isArray(split.chars) ? split.chars : []
+
+    if (chars.length === 0) {
+      split.revert()
+      return
+    }
+
+    const animation = animate(chars, {
+      y: [
+        { to: '-2.75rem', ease: 'outExpo', duration: 900 },
+        { to: 0, ease: 'outBounce', duration: 1200, delay: 180 },
+      ],
+      rotate: {
+        from: '-1turn',
+        delay: 0,
+      },
+      delay: stagger(90),
+      ease: 'inOutCirc',
+      loopDelay: 1800,
+      loop: true,
+    })
+
+    window.__heroGreetingCleanup = () => {
+      if (animation && typeof animation.pause === 'function') {
+        animation.pause()
+      }
+      split.revert()
+    }
+  }
+
+  const initHeroPhoto = () => {
+    if (typeof window === 'undefined') return
+
+    if (typeof window.__heroPhotoCleanup === 'function') {
+      window.__heroPhotoCleanup()
+      window.__heroPhotoCleanup = undefined
+    }
+
+    const photoFrames = [...document.querySelectorAll<HTMLElement>('[data-hero-photo]')]
+    if (photoFrames.length === 0) return
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const hasFinePointer = window.matchMedia('(pointer: fine)').matches
+
+    if (prefersReducedMotion || !hasFinePointer) {
+      photoFrames.forEach((frame) => frame.style.setProperty('--proximity', '0'))
+      return
+    }
+
+    let pointerX = 0
+    let pointerY = 0
+    let rafId = 0
+
+    const updateFrames = () => {
+      rafId = 0
+
+      photoFrames.forEach((frame) => {
+        const rect = frame.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+        const maxDistance = Number(frame.dataset.maxDistance ?? '320')
+        const distance = Math.hypot(pointerX - centerX, pointerY - centerY)
+        const proximity = Math.max(0, 1 - distance / maxDistance)
+        frame.style.setProperty('--proximity', proximity.toFixed(4))
+      })
+    }
+
+    const queueUpdate = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(updateFrames)
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      pointerX = event.clientX
+      pointerY = event.clientY
+      queueUpdate()
+    }
+
+    const resetFrames = () => {
+      photoFrames.forEach((frame) => frame.style.setProperty('--proximity', '0'))
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    window.addEventListener('blur', resetFrames)
+
+    window.__heroPhotoCleanup = () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId)
+      }
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('blur', resetFrames)
+      resetFrames()
+    }
+  }
+
+  initHeroGreeting()
+  initHeroPhoto()
+  document.addEventListener('astro:page-load', initHeroGreeting)
+  document.addEventListener('astro:page-load', initHeroPhoto)
+</script>
+
+<style lang="scss">
+  [data-hero-greeting] .char {
+    display: inline-block;
+    transform-origin: center bottom;
+    will-change: transform;
+  }
+
+  .hero-photo-wrap {
+    justify-content: center;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .hero-actions .hero-cta {
+    justify-content: center;
+    inline-size: 100%;
+  }
+
+  @media (min-width: 500px) {
+    .hero-actions .hero-cta {
+      inline-size: auto;
+    }
+  }
+
+  .hero-photo-frame {
+    --proximity: 0;
+
+    position: relative;
+    transform: scale(calc(1 + var(--proximity) * 0.03));
+    transition:
+      transform 260ms cubic-bezier(0.2, 0.72, 0.18, 1),
+      box-shadow 260ms cubic-bezier(0.2, 0.72, 0.18, 1);
+    box-shadow:
+      0 18px 48px color-mix(in oklab, var(--color-primary-600) 22%, transparent),
+      0 0 26px color-mix(in oklab, var(--color-secondary-500) calc(var(--proximity) * 32%), transparent);
+    border-radius: clamp(20px, 3vw, 30px);
+    background: linear-gradient(
+      130deg,
+      color-mix(in oklab, var(--color-secondary-300) 70%, transparent),
+      color-mix(in oklab, var(--color-primary-300) 80%, transparent)
+    );
+    padding: 2px;
+  }
+
+  .hero-photo {
+    display: block;
+    transform: scale(calc(1 + var(--proximity) * 0.17));
+    filter: saturate(calc(1 + var(--proximity) * 0.2)) brightness(calc(1 + var(--proximity) * 0.06));
+    transition:
+      border-radius 280ms cubic-bezier(0.2, 0.72, 0.18, 1),
+      transform 280ms cubic-bezier(0.2, 0.72, 0.18, 1),
+      filter 280ms cubic-bezier(0.2, 0.72, 0.18, 1);
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 70%, transparent);
+    border-radius: calc(50% - var(--proximity) * 47%);
+    aspect-ratio: 1 / 1;
+    inline-size: clamp(180px, 42vw, 390px);
+    max-inline-size: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  .hero h1 {
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+  }
+
+  .text-gradient {
+    background: linear-gradient(
+      315deg,
+      light-dark(var(--color-primary-300), var(--color-secondary-100)) 25%,
+      light-dark(var(--color-secondary-300), var(--color-primary-200))
+    );
+    background-clip: border-box;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero-photo-frame,
+    .hero-photo {
+      transform: none;
+      transition: none;
+    }
+  }
+
+  @media (max-width: 1023px) {
+    .hero-photo-wrap {
+      margin-top: 0.25rem;
+      order: -1;
+    }
+
+    .hero-photo {
+      inline-size: clamp(170px, 46vw, 300px);
+    }
+  }
+
+  @media (max-width: 639px) {
+    .hero-photo-wrap {
+      margin-top: 0;
+    }
+
+    .hero-photo {
+      inline-size: clamp(150px, 58vw, 240px);
+    }
+  }
+</style>
