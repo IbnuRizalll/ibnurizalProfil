@@ -129,8 +129,61 @@ const {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const hasFinePointer = window.matchMedia('(pointer: fine)').matches
 
-    if (prefersReducedMotion || !hasFinePointer) {
+    if (prefersReducedMotion) {
       photoFrames.forEach((frame) => frame.style.setProperty('--proximity', '0'))
+      return
+    }
+
+    let resetTimer = 0
+    const clearResetTimer = () => {
+      if (!resetTimer) return
+      window.clearTimeout(resetTimer)
+      resetTimer = 0
+    }
+
+    const resetFrames = () => {
+      clearResetTimer()
+      photoFrames.forEach((frame) => frame.style.setProperty('--proximity', '0'))
+    }
+
+    const activateFrame = (targetFrame: HTMLElement, intensity = 1) => {
+      clearResetTimer()
+      photoFrames.forEach((frame) => frame.style.setProperty('--proximity', frame === targetFrame ? intensity.toFixed(4) : '0'))
+    }
+
+    if (!hasFinePointer) {
+      const onPointerDown = (event: PointerEvent) => {
+        const frame = event.currentTarget
+        if (!(frame instanceof HTMLElement)) return
+        activateFrame(frame, 1)
+      }
+
+      const onPointerUp = () => {
+        clearResetTimer()
+        resetTimer = window.setTimeout(resetFrames, 420)
+      }
+
+      photoFrames.forEach((frame) => {
+        frame.addEventListener('pointerdown', onPointerDown, { passive: true })
+        frame.addEventListener('pointerup', onPointerUp, { passive: true })
+        frame.addEventListener('pointercancel', onPointerUp, { passive: true })
+        frame.addEventListener('pointerleave', onPointerUp, { passive: true })
+      })
+
+      window.addEventListener('blur', resetFrames)
+
+      window.__heroPhotoCleanup = () => {
+        clearResetTimer()
+        photoFrames.forEach((frame) => {
+          frame.removeEventListener('pointerdown', onPointerDown)
+          frame.removeEventListener('pointerup', onPointerUp)
+          frame.removeEventListener('pointercancel', onPointerUp)
+          frame.removeEventListener('pointerleave', onPointerUp)
+        })
+        window.removeEventListener('blur', resetFrames)
+        resetFrames()
+      }
+
       return
     }
 
@@ -161,10 +214,6 @@ const {
       pointerX = event.clientX
       pointerY = event.clientY
       queueUpdate()
-    }
-
-    const resetFrames = () => {
-      photoFrames.forEach((frame) => frame.style.setProperty('--proximity', '0'))
     }
 
     window.addEventListener('pointermove', onPointerMove, { passive: true })
