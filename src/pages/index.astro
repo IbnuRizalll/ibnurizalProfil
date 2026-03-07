@@ -10,7 +10,11 @@ import { Heading } from 'accessible-astro-components'
 const siteSettings = await getSiteSettings()
 ---
 
-<DefaultLayout title="Ibnu Rizal Mutaqim - Profil & Portofolio" useTitleTemplate={false}>
+<DefaultLayout
+  title="Ibnu Rizal Mutaqim | Web Developer Portfolio"
+  description="Official portfolio website of Ibnu Rizal Mutaqim. Explore experience, selected projects, blog notes, and contact details."
+  useTitleTemplate={false}
+>
   <Hero src={siteSettings.homeImageUrl} description="Holaa! Selamat datang di website profil saya.">
     <span class="text-gradient" data-hero-greeting>Haiiii Haiii</span>
   </Hero>

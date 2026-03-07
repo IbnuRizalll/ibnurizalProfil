@@ -42,6 +42,14 @@ interface Props {
    * The language of the page
    */
   lang?: string
+  /**
+   * Optional JSON-LD object(s) for page-specific schema.org data
+   */
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>
+  /**
+   * Whether search engines should index the page
+   */
+  noindex?: boolean
 }
 
 const props = Astro.props as Props
@@ -71,6 +79,8 @@ const {
   type = 'website',
   useTitleTemplate = true,
   lang = 'en',
+  structuredData = [],
+  noindex = false,
 } = props
 
 // For social sharing, we need the full absolute URL
@@ -78,6 +88,34 @@ const {
 const imagePath = image ? (typeof image === 'string' ? image : image.src) : '/social-preview-image.png'
 const canonicalUrl = toAbsoluteUrl(url)
 const imageUrl = toAbsoluteUrl(imagePath)
+const siteUrl = toAbsoluteUrl('/')
+const personName = (themeConfig.seo.author || themeConfig.name || '').trim()
+const socialProfiles = (themeConfig.socials || [])
+  .map((social) => social?.href)
+  .filter((href): href is string => typeof href === 'string' && /^https?:\/\//i.test(href))
+
+const personSchema: Record<string, unknown> = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  '@id': `${siteUrl}#person`,
+  name: personName,
+  url: siteUrl,
+  image: toAbsoluteUrl('/astronaut-hero-img.webp'),
+  sameAs: socialProfiles,
+  jobTitle: 'Web Developer',
+}
+
+const websiteSchema: Record<string, unknown> = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  '@id': `${siteUrl}#website`,
+  name: themeConfig.seo.title,
+  url: siteUrl,
+  inLanguage: lang,
+}
+
+const normalizedStructuredData = Array.isArray(structuredData) ? structuredData : structuredData ? [structuredData] : []
+const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructuredData]
 ---
 
 <html lang={lang} dir="ltr">
@@ -85,6 +123,7 @@ const imageUrl = toAbsoluteUrl(imagePath)
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
 
     <!-- favicon -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -138,6 +177,12 @@ const imageUrl = toAbsoluteUrl(imagePath)
         ],
       }}
     />
+
+    {
+      structuredDataGraph.map((item) => (
+        <script type="application/ld+json" is:inline set:html={JSON.stringify(item)} />
+      ))
+    }
 
     <!-- Enable Astro View Transitions for all browsers -->
     <ClientRouter />

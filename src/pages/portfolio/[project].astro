@@ -73,9 +73,37 @@ const fallbackParagraphBlocks: PortfolioContentBlock[] = project.body
   : []
 
 const contentBlocks = project.contentBlocks.length > 0 ? project.contentBlocks : fallbackParagraphBlocks
+const siteBaseUrl = Astro.site ?? new URL(Astro.url.origin)
+const projectCanonicalUrl = new URL(`/portfolio/${project.slug}`, siteBaseUrl).href
+const isNotFound = !foundProject
+const projectStructuredData = isNotFound
+  ? null
+  : {
+      '@context': 'https://schema.org',
+      '@type': 'CreativeWork',
+      name: project.title,
+      description: project.description,
+      image: [new URL(project.featuredImage, siteBaseUrl).href],
+      creator: {
+        '@type': 'Person',
+        name: project.author,
+      },
+      author: {
+        '@type': 'Person',
+        name: project.author,
+      },
+      url: projectCanonicalUrl,
+      inLanguage: 'id-ID',
+    }
 ---
 
-<DefaultLayout title={project.title} description={project.description} url={`/portfolio/${project.slug}`}>
+<DefaultLayout
+  title={`${project.title} | Portfolio Ibnu Rizal Mutaqim`}
+  description={project.description}
+  url={`/portfolio/${project.slug}`}
+  noindex={isNotFound}
+  structuredData={projectStructuredData ? [projectStructuredData] : []}
+>
   <PageHeader
     title={project.title}
     subtitle={project.description}

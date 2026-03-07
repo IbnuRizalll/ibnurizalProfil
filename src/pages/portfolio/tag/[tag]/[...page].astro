@@ -55,7 +55,10 @@ const firstPageHref = safePage > 1 ? `/portfolio/tag/${currentTag.slug}` : null
 const lastPageHref = safePage < lastPage ? `/portfolio/tag/${currentTag.slug}/${lastPage}` : null
 ---
 
-<DefaultLayout title={`Portofolio - ${currentTag.label}`} description={`Daftar proyek dengan tag ${currentTag.label}.`}>
+<DefaultLayout
+  title={`${currentTag.label} Projects | Ibnu Rizal Mutaqim`}
+  description={`Portfolio projects by Ibnu Rizal Mutaqim tagged with ${currentTag.label}.`}
+>
   <PageHeader
     title={`Portofolio: ${currentTag.label}`}
     subtitle={`Menampilkan ${totalProjects} proyek dengan tag "${currentTag.label}". <a href="/portfolio">View all projects</a>.`}

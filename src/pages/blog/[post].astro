@@ -73,9 +73,39 @@ const fallbackParagraphBlocks: BlogContentBlock[] = post.body
   : []
 
 const contentBlocks = post.contentBlocks.length > 0 ? post.contentBlocks : fallbackParagraphBlocks
+const siteBaseUrl = Astro.site ?? new URL(Astro.url.origin)
+const postCanonicalUrl = new URL(`/blog/${post.slug}`, siteBaseUrl).href
+const isNotFound = !foundPost
+const blogPostStructuredData = isNotFound
+  ? null
+  : {
+      '@context': 'https://schema.org',
+      '@type': 'BlogPosting',
+      headline: post.title,
+      description: post.description,
+      image: [new URL(post.featuredImage, siteBaseUrl).href],
+      author: {
+        '@type': 'Person',
+        name: post.author,
+      },
+      publisher: {
+        '@type': 'Person',
+        name: 'Ibnu Rizal Mutaqim',
+      },
+      mainEntityOfPage: postCanonicalUrl,
+      url: postCanonicalUrl,
+      inLanguage: 'id-ID',
+    }
 ---
 
-<DefaultLayout title={post.title} description={post.description} type="article" url={`/blog/${post.slug}`}>
+<DefaultLayout
+  title={`${post.title} | Blog Ibnu Rizal Mutaqim`}
+  description={post.description}
+  type="article"
+  url={`/blog/${post.slug}`}
+  noindex={isNotFound}
+  structuredData={blogPostStructuredData ? [blogPostStructuredData] : []}
+>
   <PageHeader
     title={post.title}
     subtitle={post.description}
