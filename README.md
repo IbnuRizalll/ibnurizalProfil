@@ -1,178 +1,165 @@
-# Accessible Astro Starter
+# Ibnu Rizal Mutaqim Portfolio
 
-<img width="1200" height="627" alt="social-preview-image" src="https://github.com/user-attachments/assets/bcd886fb-dd70-4a81-ac73-e138f3ce8d35" />
+Portfolio website + admin CMS built with Astro, Supabase, and Prisma.
 
-[![Built with Astro](https://astro.badg.es/v2/built-with-astro/small.svg)](https://astro.build)
+Live site: `https://ibnurizal-profil.vercel.app`
 
-A ready-to-use, SEO and accessibility-focused Astro starter template. Built with modern web standards, WCAG 2.2 AA guidelines, and European Accessibility Act (EAA) compliance in mind, it provides a solid foundation for creating inclusive websites. Features Tailwind CSS 4 integration, comprehensive component library with enhanced form validation, color contrast checker, and typography with Atkinson Hyperlegible font for improved readability. Includes a powerful command launcher for keyboard-driven navigation, preference toggles for dark mode, high contrast, and reduced motion, plus dynamic portfolio pages with social sharing, contact forms, and full MDX support.
+## Stack
 
-[![LIVE DEMO](https://img.shields.io/badge/LIVE_DEMO-4ECCA3?style=for-the-badge&logo=astro&logoColor=black)](https://accessible-astro-starter.incluud.dev/) &nbsp;
-[![DOCUMENTATION](https://img.shields.io/badge/DOCUMENTATION-A682FF?style=for-the-badge&logo=astro&logoColor=black)](https://accessible-astro.incluud.dev/) &nbsp;
-[![Sponsor on Open Collective](https://img.shields.io/badge/Open%20Collective-7FADF2?style=for-the-badge&logo=opencollective&logoColor=white)](https://opencollective.com/incluud) &nbsp;
+- Astro 5 (server output)
+- Tailwind CSS 4
+- Supabase (Auth, Postgres, Storage)
+- Prisma ORM
+- accessible-astro-components
 
-## Our mission
+## Main Features
 
-> Provide developers with accessible, easy-to-use components that make building inclusive web applications simpler and faster, without compromising on customization or performance.
+- Public pages:
+  - About Me (`/`)
+  - Experience & Portfolio (`/portfolio`)
+  - Blog / Daily Notes (`/blog`)
+  - Contact (`/contact`)
+- Admin pages:
+  - Edit About (`/admin/about`)
+  - Edit Portfolio (`/admin/portfolio`)
+  - Edit Blog (`/admin/blog`)
+  - Contact Messages (`/admin/messages`)
+  - Storage Cleanup / orphan files (`/admin/storage`)
+- Content editor supports block-based content:
+  - Paragraph
+  - Image upload
+  - Table (including CSV import flow in admin script)
+- Security:
+  - CSRF token check
+  - Origin / fetch-site validation
+  - API rate limiting
+  - Admin allowlist via `ADMIN_ALLOWED_EMAILS`
+  - Admin idle timeout (`PUBLIC_ADMIN_IDLE_TIMEOUT_MINUTES`)
 
-## (Accessibility) Features
+## Local Development
 
-- Astro 5.16.0+
-- Tailwind CSS 4.1+ support
-- TypeScript integration with path aliases for easier imports and content collections support
-- Prettier integration with `prettier-plugin-astro` and `prettier-plugin-tailwind`
-- ESLint integration with strict accessibility settings for `eslint-plugin-jsx-a11y`
-- Markdown and MDX support with comprehensive examples and components
-- Modern OKLCH color system with automatic palette generation from primary/secondary colors
-- Atkinson Hyperlegible font for improved readability and accessibility
-- Lucide icon set via `astro-icon` for consistent, friendly icons
-- Semantic HTML structure with `Button`, `Link` and `Heading` components
-- Excellent Lighthouse/PageSpeed scores
-- Accessible landmarks such as `header`, `main`, `footer`, `section` and `nav`
-- Outline focus indicator which works on dark and light backgrounds
-- Several `aria` attributes which provide a better experience for screen reader users
-- Dynamic portfolio routes demonstrate the use of Astro `getStaticPaths` and pagination
-- `404.astro` provides a custom 404 error page which you can adjust to your needs
-- `Header.astro` component with optimized accessibility and design
-- `Footer.astro` component with informative content and links
-- `SkipLinks.astro` component to skip to either the main menu or the main content
-- `Navigation.astro` component with keyboard accessible (dropdown) navigation and highlighted menu item option
-- `ResponsiveToggle.astro` component with accessible responsive toggle functionality
-- Preference toggles for Dark Mode, High Contrast, and Reduced Motion with system preference support
-- `ColorContrast.astro` component for enhanced visual clarity and WCAG compliance
-- Built-in command launcher with keyboard navigation (Cmd/Ctrl+K) for quick access to preferences and navigation
-- `SiteMeta.astro` SEO component for setting custom metadata on different pages
-- `.sr-only` utility class for screen reader only text content (hides text visually)
-- `prefers-reduced-motion` disables animations for users that have this preference turned on
-- Components including `ColorContrast.astro`, `BlockQuote.astro`, `BreakoutImage.astro`, `Logo.astro`, `SocialShares.astro`, `PageHeader.astro`, and `FeaturedProjects.astro`
-- Enhanced form components with comprehensive validation: `Form`, `Input`, `Textarea`, `Checkbox`, `Radio`, and `Fieldset` with WCAG 2.2 compliance
-- Automatic form validation with custom patterns, error handling, and screen reader support
-- Portfolio pages with featured images, author details, social sharing, and breakout images
-- Contact page with comprehensive form validation showcase and accessibility demonstrations
-- Thank-you page for form submissions with interactive feedback
-- Color Contrast Checker interactive page
-- Comprehensive sitemap page with organized navigation and automatic XML sitemap generation via `@astrojs/sitemap`
-- Enhanced accessible-components showcase page with expanded component demonstrations
-- Smooth micro-interactions and animations on hover, open and close states (respecting reduced motion preferences)
-- Comprehensive SCSS utility classes
-- CSS with logical properties and custom properties
-- Accessible button and hyperlink styling with clear focus states
-- Styled `<kbd>` element for keyboard shortcut documentation
+1. Install dependencies:
 
-## Getting started
+```bash
+npm install
+```
 
-Clone this theme locally and run any of the following commands in your terminal:
+2. Copy env:
 
-| Command           | Action                                       |
-| :---------------- | :------------------------------------------- |
-| `npm install`     | Installs dependencies                        |
-| `npm run dev`     | Starts local dev server at `localhost:4321`  |
-| `npm run start:prod` | Runs production server from `dist/server/entry.mjs` |
-| `npm run lint`    | Runs ESLint checks                           |
-| `npm run typecheck` | Runs Astro type checks                     |
-| `npm run test:unit` | Runs Vitest unit tests                      |
-| `npm run test:e2e` | Runs Playwright smoke tests                  |
-| `npm test`        | Runs unit tests + e2e smoke tests            |
-| `npm run check`   | Runs lint + typecheck + production build     |
-| `npm run build`   | Build your production site to `./dist/`      |
-| `npm run preview` | Preview your build locally, before deploying |
+```bash
+cp .env.example .env
+```
 
-## Testing
+3. Fill required env values in `.env`.
+4. Sync Prisma client + database:
 
-- Unit tests are located in `tests/unit` and run with Vitest.
-- E2E smoke tests are located in `tests/e2e` and run with Playwright (Chromium).
-- For local E2E setup, install the browser once with `npx playwright install chromium`.
-- You can set `PUBLIC_SUPABASE_FETCH_DISABLED=1` (or `SUPABASE_FETCH_DISABLED=1`) to skip server-side Supabase reads during test runs.
+```bash
+npm run prisma:generate
+npm run prisma:push
+```
 
-## Runtime architecture
+5. Run SQL in `supabase/schema.sql` on Supabase SQL Editor (RLS, trigger, policies).
+6. Create at least one Supabase Auth user (email/password).
+7. Start dev server:
 
-- This project is configured for **server output** (`@astrojs/node`, standalone mode).
-- Internal Astro API routes (`/api/*`) are required for contact and admin write operations.
-- Deploy to a Node-capable runtime (VPS, Docker, Railway, Render, Fly.io, or similar).
-- If you want Vercel/Netlify serverless deployment, switch to the matching Astro adapter first.
+```bash
+npm run dev
+```
 
-## Content admin panel (Supabase)
+## Environment Variables
 
-This starter now uses Supabase as the source of truth for portfolio content, with login at `/login` and admin dashboard at `/admin`.
+Required:
 
-### Setup steps
+- `DATABASE_URL`
+- `DIRECT_URL`
+- `PUBLIC_SUPABASE_URL`
+- `PUBLIC_SUPABASE_ANON_KEY`
+- `PUBLIC_SUPABASE_ASSETS_BUCKET` (default bucket: `site-assets`)
 
-1. Create a Supabase project.
-2. Install Prisma dependencies:
-   - `npm install prisma --save-dev`
-   - `npm install @prisma/client`
-3. Copy `.env.example` to `.env` and set:
-   - `DATABASE_URL`
-   - `DIRECT_URL`
-   - `PUBLIC_SUPABASE_URL`
-   - `PUBLIC_SUPABASE_ANON_KEY`
-   - `PUBLIC_SUPABASE_ASSETS_BUCKET`
-4. Initialize database table via Prisma:
-   - `npm run prisma:push`
-   - `npm run prisma:generate`
-5. Run SQL from `supabase/schema.sql` in the Supabase SQL editor (for RLS policies and trigger setup).
-6. Create at least one Supabase Auth user (Email/Password).
-7. Run `npm run dev`, open `/login`, then continue to `/admin`.
-8. Before pushing changes, run `npm run check`.
+Recommended:
 
-### Security reminder
+- `ADMIN_ALLOWED_EMAILS` (comma-separated admin emails)
+- `PUBLIC_ADMIN_IDLE_TIMEOUT_MINUTES` (15-30, default 20)
+- `SUPABASE_CONTENT_CACHE_TTL_MS`
+- `SUPABASE_SITE_SETTINGS_CACHE_TTL_MS`
 
-- Never commit real credentials to `.env.example` or source files.
-- If credentials are leaked, rotate them immediately in Supabase.
+See full template in `.env.example`.
 
-### What the admin edits
+## Scripts
 
-- Table: `public.projects`
-- Fields: `slug`, `title`, `author`, `description`, `tags`, `body`
+- `npm run dev` - start local server
+- `npm run build` - production build
+- `npm run preview` - preview build
+- `npm run lint` - lint check
+- `npm run typecheck` - Astro type check
+- `npm run check` - lint + typecheck + build
+- `npm run prisma:generate` - generate Prisma client
+- `npm run prisma:push` - sync schema to DB
 
-### Security model
+## Deploy (Vercel)
 
-- Public can read projects (`SELECT` policy)
-- Only authenticated users can create/update/delete projects (`INSERT/UPDATE/DELETE` policies)
-- Write operations from `/contact` and `/admin/*` go through internal Astro API routes (`/api/*`) with server-side token verification.
+This project already supports Vercel adapter in `astro.config.mjs`.
 
-## Accessible Astro ecosystem
+Steps:
 
-The Accessible Astro ecosystem is a collection of projects that are designed to help you build accessible web applications. It includes:
+1. Push to GitHub.
+2. Import repo in Vercel.
+3. Set environment variables in Vercel Project Settings.
+4. Redeploy.
+5. In Supabase Auth settings:
+   - Add Vercel URL to Site URL
+   - Add callback/redirect URL for login flow
 
-- [Accessible Astro Starter](https://github.com/incluud/accessible-astro-starter): Fully accessible starter for kickstarting Astro projects, with Tailwind.
-- [Accessible Astro Components](https://github.com/incluud/accessible-astro-components/): Library of reusable, accessible components built for Astro.
-- [Accessible Astro Dashboard](https://github.com/incluud/accessible-astro-dashboard/): User-friendly dashboard interface with a login screen and widgets.
-- [Accessible Astro Launcher](https://github.com/incluud/accessible-astro-launcher): Command palette/launcher component for Astro projects.
-- [Accessible Astro Docs](https://github.com/incluud/accessible-astro-docs): Comprehensive documentation for all Accessible Astro projects.
-- [Color Contrast Checker](https://github.com/incluud/color-contrast-checker): WCAG-compliant color contrast checker with design system token generation.
+## SEO & Indexing
 
-Check out our [roadmap](https://github.com/orgs/incluud/projects/4/views/1) to see what's coming next!
+Already configured:
 
-## Contributing
+- `sitemap-index.xml` (generated by Astro sitemap integration)
+- `robots.txt` in `public/`
+- `sitemap.xml` alias in `public/`
+- Person + Website JSON-LD in default layout
+- Per-page meta title/description updates
 
-We welcome contributions to improve the documentation! You can help by:
+Google Search Console:
 
-1. [Filing an issue](https://github.com/incluud/accessible-astro-starter/issues)
-2. [Submitting a pull request](https://github.com/incluud/accessible-astro-starter/pulls)
-3. [Starting a discussion](https://github.com/incluud/accessible-astro-starter/discussions)
-4. [Supporting on Open Collective](https://opencollective.com/incluud)
+1. Add URL-prefix property: `https://ibnurizal-profil.vercel.app/`
+2. Submit sitemap: `sitemap.xml`
+3. Request indexing for important URLs (`/`, `/portfolio`, `/blog`, `/contact`)
 
-## Support this project
+## Troubleshooting
 
-Your support helps us cover basic costs and continue building accessible solutions for the Astro ecosystem. By becoming a sponsor, you're not just supporting code – you're helping create a more inclusive web for everyone. Every contribution, big or small, helps maintain and improve these accessibility-focused tools.
+### Origin request tidak diizinkan
 
-[![Sponsor on Open Collective](https://img.shields.io/badge/Open%20Collective-7FADF2?style=for-the-badge&logo=opencollective&logoColor=white)](https://opencollective.com/incluud)
+- Ensure request comes from the same deployed domain.
+- Re-login to refresh session and CSRF token.
+- Ensure `ADMIN_ALLOWED_EMAILS` includes your admin email.
 
-## Together we make a difference
+### Bucket not found / upload failed
 
-We want to express our heartfelt gratitude to everyone who contributes to making the web more accessible:
+- Create Supabase Storage bucket: `site-assets` (or match env value).
+- Bucket must be accessible by your RLS/policies.
 
-- **The Astro team** for creating an amazing static site generator and the wonderful Starlight theme
-- **Our contributors** who dedicate their time and expertise to improve these tools
-- [**Niek Derksen**](https://niekderksen.nl) for conducting comprehensive accessibility audits to ensure WCAG compliance
-- **Our sponsors** who help make this project sustainable
-- **The web community** for embracing and promoting web accessibility
-- **You, the developer** for choosing to make your projects more accessible
+### RLS insert/update denied
 
-<a href="https://github.com/incluud/accessible-astro-starter/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=incluud/accessible-astro-starter" />
-</a><br /><br />
+- Re-run SQL policies in `supabase/schema.sql`.
+- Verify table policies for authenticated admin operations.
 
-Together, we're not just building documentation or components – we're creating a more inclusive and accessible web for everyone. Every contribution, whether it's code, documentation, bug reports, or feedback, helps move us closer to this goal. ✨
+### Orphan cleanup error
 
-Remember: Accessibility is not a feature, it's a fundamental right. Thank you for being part of this journey!
+- Endpoint: `/api/admin/orphan-assets`
+- If storage schema API is restricted, code includes fallback using direct DB query/delete on `storage.objects`.
+
+## Important Paths
+
+- `src/pages/api/admin/supabase-write.ts`
+- `src/pages/api/admin/upload-asset.ts`
+- `src/pages/api/admin/orphan-assets.ts`
+- `src/pages/api/contact-messages.ts`
+- `src/components/admin/scripts/*`
+- `src/utils/api-security.ts`
+- `supabase/schema.sql`
+- `prisma/schema.prisma`
+
+## License
+
+MIT (follow repository `LICENSE`).
