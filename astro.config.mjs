@@ -9,6 +9,21 @@ import sitemap from '@astrojs/sitemap'
 import tailwindcss from '@tailwindcss/vite'
 import { enhanceConfigForWorkspace } from './scripts/workspace-config.js'
 
+const excludedSitemapPrefixes = ['/admin', '/login', '/thank-you']
+
+function shouldIncludeInSitemap(page) {
+  const rawValue = typeof page === 'string' ? page : String(page || '')
+  let pathname = rawValue
+
+  try {
+    pathname = new URL(rawValue).pathname
+  } catch {
+    pathname = rawValue
+  }
+
+  return !excludedSitemapPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))
+}
+
 // Vite configuration with path aliases and SCSS settings
 const viteConfig = {
   css: {
@@ -43,6 +58,13 @@ export default defineConfig({
   adapter: process.env.VERCEL ? vercel() : node({ mode: 'standalone' }),
   compressHTML: true,
   site: 'https://ibnurizal-profil.vercel.app',
-  integrations: [compress(), icon(), mdx(), sitemap()],
+  integrations: [
+    compress(),
+    icon(),
+    mdx(),
+    sitemap({
+      filter: shouldIncludeInSitemap,
+    }),
+  ],
   vite: enhanceConfigForWorkspace(viteConfig),
 })

@@ -148,8 +148,30 @@ export function isAllowedRequestOrigin(request: Request, options: OriginValidati
 
   try {
     const origin = new URL(originHeader).origin
-    const requestOrigin = new URL(request.url).origin
-    return origin === requestOrigin
+    const allowedOrigins = new Set<string>()
+    const requestUrl = new URL(request.url)
+    allowedOrigins.add(requestUrl.origin)
+
+    const forwardedHost = getFirstHeaderValue(request.headers.get('x-forwarded-host'))
+    const forwardedProto = getFirstHeaderValue(request.headers.get('x-forwarded-proto')).toLowerCase()
+    const hostHeader = getFirstHeaderValue(request.headers.get('host'))
+
+    const protocol = forwardedProto === 'http' || forwardedProto === 'https' ? forwardedProto : requestUrl.protocol.replace(':', '')
+
+    const addOriginFromHost = (hostValue: string): void => {
+      const host = hostValue.trim().toLowerCase()
+      if (!host) return
+      try {
+        allowedOrigins.add(new URL(`${protocol}://${host}`).origin)
+      } catch {
+        // Ignore malformed host values from intermediary proxies.
+      }
+    }
+
+    addOriginFromHost(forwardedHost)
+    addOriginFromHost(hostHeader)
+
+    return allowedOrigins.has(origin)
   } catch {
     return false
   }
