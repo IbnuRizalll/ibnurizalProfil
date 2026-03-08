@@ -9,7 +9,7 @@ export default defineThemeConfig({
   seo: {
     title: 'Ibnu Rizal Mutaqim',
     description:
-      'Website profil profesional Ibnu Rizal Mutaqim. Menampilkan pengalaman kerja, portofolio proyek, dan kontak kolaborasi.',
+      'Ibnu Rizal Mutaqim adalah mahasiswa yang aktif belajar dan mengembangkan website modern, sambil mendokumentasikan project, pengalaman, dan proses belajarnya.',
     author: 'Ibnu Rizal Mutaqim',
     image: previewImage,
   },
