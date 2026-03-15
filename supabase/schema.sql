@@ -48,10 +48,18 @@ execute procedure public.set_projects_updated_at();
 alter table public.projects enable row level security;
 
 drop policy if exists "Public read projects" on public.projects;
+drop policy if exists "Authenticated read projects" on public.projects;
 create policy "Public read projects"
   on public.projects
   for select
+  to anon
   using (coalesce(is_visible, true) = true);
+
+create policy "Authenticated read projects"
+  on public.projects
+  for select
+  to authenticated
+  using (true);
 
 drop policy if exists "Authenticated insert projects" on public.projects;
 create policy "Authenticated insert projects"
@@ -123,10 +131,18 @@ execute procedure public.set_blog_posts_updated_at();
 alter table public.blog_posts enable row level security;
 
 drop policy if exists "Public read blog_posts" on public.blog_posts;
+drop policy if exists "Authenticated read blog_posts" on public.blog_posts;
 create policy "Public read blog_posts"
   on public.blog_posts
   for select
+  to anon
   using (coalesce(is_visible, true) = true);
+
+create policy "Authenticated read blog_posts"
+  on public.blog_posts
+  for select
+  to authenticated
+  using (true);
 
 drop policy if exists "Authenticated insert blog_posts" on public.blog_posts;
 create policy "Authenticated insert blog_posts"
@@ -400,3 +416,4 @@ create policy "Authenticated delete site-assets"
   for delete
   to authenticated
   using (bucket_id = 'site-assets');
+
