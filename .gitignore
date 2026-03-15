@@ -24,7 +24,6 @@ yarn-error.log*
 .idea
 
 # package lock
-package-lock.json
 
 # astro build files
 .astro
