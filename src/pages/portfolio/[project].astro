@@ -110,9 +110,10 @@ const projectStructuredData = isNotFound
     author={author}
     bgType="bordered"
     featuredImage={project.featuredImage}
+    featuredImageLayout="natural"
   />
 
-  <section class="my-10 md:my-12 article-wrap">
+  <section class="article-wrap my-10 md:my-12">
     <article class="article-content container">
       {
         contentBlocks.length > 0 ? (
@@ -129,19 +130,23 @@ const projectStructuredData = isNotFound
                 {block.caption && <figcaption>{block.caption}</figcaption>}
                 <div class="article-table-scroll">
                   <table>
-                    {
-                      block.headers.length > 0 && (
-                        <thead>
-                          <tr>
-                            {block.headers.map((header) => (
-                              <th scope="col">{header}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                      )
-                    }
+                    {block.headers.length > 0 && (
+                      <thead>
+                        <tr>
+                          {block.headers.map((header) => (
+                            <th scope="col">{header}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                    )}
                     <tbody>
-                      {block.rows.map((row) => <tr>{row.map((cell) => <td>{cell}</td>)}</tr>)}
+                      {block.rows.map((row) => (
+                        <tr>
+                          {row.map((cell) => (
+                            <td>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -181,8 +186,8 @@ const projectStructuredData = isNotFound
   }
 
   .article-wrap p {
-    line-height: 1.8;
     font-size: clamp(1rem, 1.2vw, 1.1rem);
+    line-height: 1.8;
     text-wrap: pretty;
     overflow-wrap: anywhere;
   }
@@ -223,18 +228,18 @@ const projectStructuredData = isNotFound
 
   .article-wrap th,
   .article-wrap td {
-    min-width: clamp(6.5rem, 12vw, 9.5rem);
-    max-width: 16rem;
+    vertical-align: top;
     border: 1px solid var(--border-color-subtle);
     padding: clamp(0.48rem, 1.35vw, 0.62rem) clamp(0.52rem, 1.4vw, 0.68rem);
-    text-align: left;
-    vertical-align: top;
+    min-width: clamp(6.5rem, 12vw, 9.5rem);
+    max-width: 16rem;
     font-size: clamp(0.82rem, 1vw, 0.98rem);
-    overflow-wrap: anywhere;
-    word-break: break-word;
-    white-space: normal;
     line-height: 1.45;
     hyphens: auto;
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .article-wrap th {
@@ -250,9 +255,9 @@ const projectStructuredData = isNotFound
 
     .article-wrap th,
     .article-wrap td {
+      padding: 0.45rem 0.5rem;
       min-width: 6rem;
       max-width: 10.5rem;
-      padding: 0.45rem 0.5rem;
       font-size: 0.84rem;
       line-height: 1.38;
     }

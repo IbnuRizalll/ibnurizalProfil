@@ -44,6 +44,10 @@ interface Props {
    */
   showBreadcrumbs?: boolean
   /**
+   * How the featured image should be displayed
+   */
+  featuredImageLayout?: 'cover' | 'natural'
+  /**
    * Custom breadcrumb labels to override the default URL-based labels
    * @description Object mapping URL segments to their display labels
    */
@@ -62,6 +66,7 @@ const {
   bgType,
   showBreadcrumbs = true,
   featuredImage,
+  featuredImageLayout = 'cover',
   author,
   customBreadcrumbLabels,
   joinLastBreadcrumb = false,
@@ -134,8 +139,15 @@ const sanitizedSubtitle: string = subtitle
     <div class="page-header-inner space-content container">
       {
         featuredImage && (
-          <div class="featured-image-container mb-8">
-            <img src={featuredImage} alt="" width="1200" height="250" class="featured-image" />
+          <div class:list={['featured-image-container mb-8', `featured-image-container-${featuredImageLayout}`]}>
+            <img
+              src={featuredImage}
+              alt=""
+              class:list={['featured-image', `featured-image-${featuredImageLayout}`]}
+              loading="eager"
+              decoding="async"
+              {...(featuredImageLayout === 'cover' ? { width: 1200, height: 250 } : {})}
+            />
           </div>
         )
       }
@@ -156,8 +168,8 @@ const sanitizedSubtitle: string = subtitle
   .page-header {
     .page-header-crumbs {
       overflow-x: auto;
-      scrollbar-width: thin;
       overscroll-behavior-x: contain;
+      scrollbar-width: thin;
     }
 
     .page-header-inner {
@@ -165,15 +177,15 @@ const sanitizedSubtitle: string = subtitle
     }
 
     h1 {
-      text-wrap: balance;
-      overflow-wrap: anywhere;
       font-size: clamp(2rem, 7.5vw, 4.2rem);
       line-height: 1.08;
+      text-wrap: balance;
+      overflow-wrap: anywhere;
     }
 
     .page-subtitle {
-      margin-block-start: clamp(0.55rem, 2vw, 0.9rem);
       margin-inline-end: auto;
+      margin-block-start: clamp(0.55rem, 2vw, 0.9rem);
       max-inline-size: min(68ch, 100%);
       font-size: clamp(1.02rem, 2.2vw, 1.5rem);
       line-height: 1.5;
@@ -214,10 +226,27 @@ const sanitizedSubtitle: string = subtitle
 
     .featured-image {
       display: block;
-      inline-size: 100%;
-      block-size: clamp(180px, 36vw, 320px);
       border-radius: clamp(10px, 2vw, 14px);
+      inline-size: 100%;
+    }
+
+    .featured-image-cover {
+      block-size: clamp(180px, 36vw, 320px);
       object-fit: cover;
+    }
+
+    .featured-image-container-natural {
+      max-inline-size: min(100%, 920px);
+      max-block-size: none;
+      overflow: visible;
+    }
+
+    .featured-image-natural {
+      inline-size: auto;
+      max-inline-size: 100%;
+      block-size: auto;
+      max-block-size: min(70vh, 820px);
+      object-fit: contain;
     }
 
     @media (max-width: 760px) {
@@ -229,8 +258,12 @@ const sanitizedSubtitle: string = subtitle
         margin-bottom: 1rem;
       }
 
-      .featured-image {
+      .featured-image-cover {
         block-size: clamp(150px, 46vw, 230px);
+      }
+
+      .featured-image-container-natural {
+        max-inline-size: 100%;
       }
     }
   }
