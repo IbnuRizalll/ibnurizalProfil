@@ -57,7 +57,8 @@
   const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
   const ADMIN_ACTIVITY_THROTTLE_MS = 5000
   const MAX_ASSET_INPUT_BYTES = 20 * 1024 * 1024
-  const MAX_ASSET_UPLOAD_BYTES = 2 * 1024 * 1024
+  const MAX_ASSET_UPLOAD_BYTES = 4 * 1024 * 1024
+  const IMAGE_COMPRESS_MIN_RATIO = 0.96
   const MAX_TABLE_IMPORT_BYTES = 10 * 1024 * 1024
   const LIST_FETCH_LIMIT = 200
   const SEARCH_DEBOUNCE_MS = 180
@@ -67,9 +68,14 @@
     { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.74 },
     { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
     { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
+    { mime: 'image/webp', maxWidth: 960, maxHeight: 960, quality: 0.56 },
+    { mime: 'image/webp', maxWidth: 720, maxHeight: 720, quality: 0.48 },
     { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
     { mime: 'image/jpeg', maxWidth: 1024, maxHeight: 1024, quality: 0.6 },
+    { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.52 },
     { mime: 'image/jpeg', maxWidth: 800, maxHeight: 800, quality: 0.54 },
+    { mime: 'image/jpeg', maxWidth: 720, maxHeight: 720, quality: 0.44 },
+    { mime: 'image/jpeg', maxWidth: 640, maxHeight: 640, quality: 0.4 },
   ]
 
   let slugDirty = false
@@ -387,7 +393,7 @@
         return file
       }
 
-      if (compressedBlob.size >= file.size) {
+      if (compressedBlob.size >= file.size * IMAGE_COMPRESS_MIN_RATIO) {
         return file
       }
 
@@ -434,7 +440,7 @@
     }
 
     if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
-      throw new Error('Ukuran gambar setelah kompres masih di atas 2MB. Gunakan gambar lebih kecil.')
+      throw new Error('Gambar otomatis dikompres, tetapi ukurannya masih di atas 4MB. Coba gunakan gambar dengan resolusi lebih kecil.')
     }
 
     const uploadOne = async (candidateFile) => {
@@ -451,18 +457,25 @@
           return formData
         })(),
       })
-
       let responseBody = null
+      let responseText = ''
       try {
-        responseBody = await response.json()
+        responseBody = await response.clone().json()
       } catch {
-        responseBody = null
+        try {
+          responseText = (await response.text()).trim()
+        } catch {
+          responseText = ''
+        }
       }
 
       if (!response.ok) {
         return {
           error: {
-            message: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Upload gagal.',
+            message:
+              (responseBody && typeof responseBody.error === 'string' && responseBody.error) ||
+              responseText ||
+              `Upload gagal (${response.status}).`,
           },
           filePath: '',
           publicUrl: '',

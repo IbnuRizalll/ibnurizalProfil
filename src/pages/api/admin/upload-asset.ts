@@ -205,17 +205,25 @@ export const POST: APIRoute = async ({ request }) => {
   const objectPath = `${folder}/${Date.now()}-${crypto.randomUUID()}-${safeBaseName}.${ext}`
   const encodedPath = encodeObjectPath(objectPath)
 
-  const uploadResponse = await fetch(`${config.url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`, {
-    method: 'POST',
-    headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': fileType || 'application/octet-stream',
-      'x-upsert': 'false',
-      'cache-control': '31536000',
-    },
-    body: inputFile,
-  })
+  let uploadResponse: Response
+  try {
+    uploadResponse = await fetch(`${config.url}/storage/v1/object/${encodeURIComponent(bucket)}/${encodedPath}`, {
+      method: 'POST',
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': fileType || 'application/octet-stream',
+        'x-upsert': 'false',
+        'cache-control': '31536000',
+      },
+      body: inputFile,
+    })
+  } catch {
+    return jsonResponse(
+      { error: 'Tidak dapat menghubungi storage backend. Periksa konfigurasi Supabase dan koneksi server.' },
+      502,
+    )
+  }
 
   if (!uploadResponse.ok) {
     const errorMessage = await readResponseError(uploadResponse, 'Failed to upload asset.')
