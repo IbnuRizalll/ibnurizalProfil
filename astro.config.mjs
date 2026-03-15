@@ -9,7 +9,18 @@ import sitemap from '@astrojs/sitemap'
 import tailwindcss from '@tailwindcss/vite'
 import { enhanceConfigForWorkspace } from './scripts/workspace-config.js'
 
+const siteUrl = 'https://ibnurizal-profil.vercel.app'
 const excludedSitemapPrefixes = ['/admin', '/login', '/thank-you']
+const securityAllowedDomains = [
+  {
+    protocol: 'https',
+    hostname: new URL(siteUrl).hostname,
+  },
+  {
+    protocol: 'https',
+    hostname: '**.vercel.app',
+  },
+]
 
 function shouldIncludeInSitemap(page) {
   const rawValue = typeof page === 'string' ? page : String(page || '')
@@ -58,7 +69,10 @@ export default defineConfig({
   output: 'server',
   adapter: process.env.VERCEL ? vercel() : node({ mode: 'standalone' }),
   compressHTML: true,
-  site: 'https://ibnurizal-profil.vercel.app',
+  site: siteUrl,
+  security: {
+    allowedDomains: securityAllowedDomains,
+  },
   integrations: [
     compress(),
     icon(),
