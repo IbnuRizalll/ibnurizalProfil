@@ -5,9 +5,16 @@ import FeaturedProjects from '@components/FeaturedProjects.astro'
 import FeaturedBlogPosts from '@components/FeaturedBlogPosts.astro'
 import AboutTerminal from '@components/AboutTerminal.astro'
 import { getSiteSettings } from '@server/content/site-settings'
+import { getProjects } from '@server/content/projects'
+import { getBlogPosts } from '@server/content/blog-posts'
 import { Heading } from 'accessible-astro-components'
 
-const siteSettings = await getSiteSettings()
+const homepageLimit = 3
+const [siteSettings, featuredProjects, featuredPosts] = await Promise.all([
+  getSiteSettings(),
+  getProjects({ limit: homepageLimit }),
+  getBlogPosts({ limit: homepageLimit }),
+])
 ---
 
 <DefaultLayout
@@ -26,6 +33,6 @@ const siteSettings = await getSiteSettings()
     </div>
   </section>
 
-  <FeaturedProjects title="Pengalaman & Proyek Pilihan" />
-  <FeaturedBlogPosts title="Tulisan saat senggang saja" />
+  <FeaturedProjects title="Pengalaman & Proyek Pilihan" projects={featuredProjects} />
+  <FeaturedBlogPosts title="Tulisan saat senggang saja" posts={featuredPosts} />
 </DefaultLayout>

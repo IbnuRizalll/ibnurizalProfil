@@ -1,7 +1,7 @@
 ---
 import { Card, Heading, Link } from 'accessible-astro-components'
 import { Icon } from 'astro-icon/components'
-import { getProjects } from '@server/content/projects'
+import { getProjects, type PortfolioProject } from '@server/content/projects'
 
 interface Props {
   /**
@@ -18,14 +18,18 @@ interface Props {
    * @default "Proyek unggulan"
    */
   title?: string
+  /**
+   * Optional prefetched projects to avoid duplicate server fetches.
+   */
+  projects?: PortfolioProject[]
 }
 
-const { class: className, limit = 3, title = 'Proyek unggulan' } = Astro.props
+const { class: className, limit = 3, title = 'Proyek unggulan', projects: providedProjects } = Astro.props
 
-const projects = await getProjects({ limit })
+const projectItems = Array.isArray(providedProjects) ? providedProjects : await getProjects({ limit })
 const projectImages = ['/projects/project-image-1.png', '/projects/project-image-2.png', '/projects/project-image-3.png']
 
-const featuredProjects = projects.map((project, index) => ({
+const featuredProjects = projectItems.map((project, index) => ({
   ...project,
   featuredImage: project.coverImageUrl || projectImages[index % projectImages.length],
 }))

@@ -249,17 +249,20 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
           return true
         })
 
-        const ancestorTargets = new Set<HTMLElement>()
+        const candidateSet = new Set(candidates)
 
-        candidates.forEach((element) => {
-          candidates.forEach((other) => {
-            if (element !== other && element.contains(other)) {
-              ancestorTargets.add(element)
+        const targets = candidates.filter((element) => {
+          let parent = element.parentElement
+
+          while (parent && parent !== mainContent) {
+            if (candidateSet.has(parent)) {
+              return false
             }
-          })
-        })
+            parent = parent.parentElement
+          }
 
-        const targets = candidates.filter((element) => !ancestorTargets.has(element))
+          return true
+        })
         if (targets.length === 0) {
           document.body.classList.remove('scroll-reveal-enabled')
           return
@@ -427,3 +430,4 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
     </style>
   </body>
 </html>
+
