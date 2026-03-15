@@ -259,6 +259,104 @@
     return response
   }
 
+  function normalizeStoragePath(value) {
+    const normalized = String(value || '')
+      .replace(/\\/g, '/')
+      .split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean)
+      .join('/')
+
+    if (!normalized || normalized.includes('\u0000')) return ''
+    const segments = normalized.split('/')
+    if (segments.some((segment) => segment === '.' || segment === '..')) return ''
+    return normalized.slice(0, 900)
+  }
+
+  function extractManagedAssetPath(rawValue) {
+    const raw = String(rawValue || '').trim()
+    if (!raw) return ''
+
+    const markers = [
+      '/storage/v1/object/public/' + SITE_ASSETS_BUCKET + '/',
+      'storage/v1/object/public/' + SITE_ASSETS_BUCKET + '/',
+    ]
+
+    const extractFromPath = (inputPath) => {
+      const decodedPath = (() => {
+        try {
+          return decodeURIComponent(inputPath)
+        } catch {
+          return inputPath
+        }
+      })()
+
+      for (const marker of markers) {
+        const markerIndex = decodedPath.indexOf(marker)
+        if (markerIndex >= 0) {
+          return normalizeStoragePath(decodedPath.slice(markerIndex + marker.length))
+        }
+      }
+
+      if (decodedPath.startsWith(SITE_ASSETS_BUCKET + '/')) {
+        return normalizeStoragePath(decodedPath.slice(SITE_ASSETS_BUCKET.length + 1))
+      }
+
+      return ''
+    }
+
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      try {
+        return extractFromPath(new URL(raw).pathname)
+      } catch {
+        return ''
+      }
+    }
+
+    return extractFromPath(raw)
+  }
+
+  async function deleteManagedAssets(paths) {
+    const normalizedPaths = [
+      ...new Set((Array.isArray(paths) ? paths : []).map((entry) => normalizeStoragePath(entry)).filter(Boolean)),
+    ]
+    if (normalizedPaths.length === 0) {
+      return { deleted: [], skippedReferenced: [], failed: [] }
+    }
+
+    const response = await authorizedApiRequest('/api/admin/orphan-assets', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'delete',
+        paths: normalizedPaths,
+      }),
+    })
+
+    let responseBody = null
+    try {
+      responseBody = await response.json()
+    } catch {
+      responseBody = null
+    }
+
+    if (!response.ok && response.status !== 207) {
+      throw new Error(
+        responseBody && typeof responseBody.error === 'string'
+          ? responseBody.error
+          : 'Cover lama belum bisa dihapus otomatis.',
+      )
+    }
+
+    return {
+      deleted: Array.isArray(responseBody?.deleted) ? responseBody.deleted : [],
+      skippedReferenced: Array.isArray(responseBody?.skippedReferenced) ? responseBody.skippedReferenced : [],
+      failed: Array.isArray(responseBody?.failed) ? responseBody.failed : [],
+    }
+  }
+
   async function adminWrite(body) {
     try {
       const response = await authorizedApiRequest('/api/admin/supabase-write', {
@@ -440,7 +538,9 @@
     }
 
     if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
-      throw new Error('Gambar otomatis dikompres, tetapi ukurannya masih di atas 4MB. Coba gunakan gambar dengan resolusi lebih kecil.')
+      throw new Error(
+        'Gambar otomatis dikompres, tetapi ukurannya masih di atas 4MB. Coba gunakan gambar dengan resolusi lebih kecil.',
+      )
     }
 
     const uploadOne = async (candidateFile) => {
@@ -1246,6 +1346,13 @@
     const tags = parseTags(fields.tags.value)
     let coverImageUrl = fields.coverImageUrl.value.trim()
     const selectedCoverFile = coverImageFileInput.files && coverImageFileInput.files[0]
+    const existingEntry = id
+      ? Array.isArray(allPosts)
+        ? allPosts.find((entry) => entry.id === id) || null
+        : null
+      : null
+    const previousCoverPath = extractManagedAssetPath(existingEntry?.cover_image_url)
+    let didUploadNewCover = false
 
     if (!title || !slug || !author || !description) {
       setStatus('Title, slug, author, and description are required.', 'error')
@@ -1260,6 +1367,7 @@
         if (!validateImageFile(selectedCoverFile, 'Cover image')) return
         setStatus('Uploading cover image...', 'info')
         coverImageUrl = await uploadAssetFile(selectedCoverFile, 'blog-covers')
+        didUploadNewCover = true
         fields.coverImageUrl.value = coverImageUrl
       }
 
@@ -1333,7 +1441,30 @@
         return
       }
 
-      setStatus(id ? 'Post updated.' : 'Post created.', 'success')
+      let successMessage = id ? 'Post updated.' : 'Post created.'
+      let successType = 'success'
+
+      if (didUploadNewCover && previousCoverPath) {
+        const nextCoverPath = extractManagedAssetPath(coverImageUrl)
+        if (nextCoverPath && nextCoverPath !== previousCoverPath) {
+          try {
+            const cleanupResult = await deleteManagedAssets([previousCoverPath])
+            if (cleanupResult.deleted.length > 0) {
+              successMessage += ' Cover lama dihapus otomatis.'
+            } else if (cleanupResult.skippedReferenced.length > 0) {
+              successMessage += ' Cover lama tetap disimpan karena masih dipakai di konten lain.'
+            } else if (cleanupResult.failed.length > 0) {
+              successType = 'info'
+              successMessage += ' Cover baru tersimpan, tetapi cover lama belum bisa dihapus otomatis.'
+            }
+          } catch {
+            successType = 'info'
+            successMessage += ' Cover baru tersimpan, tetapi cover lama belum bisa dihapus otomatis.'
+          }
+        }
+      }
+
+      setStatus(successMessage, successType)
       resetForm()
       await loadPosts()
     } catch (error) {
