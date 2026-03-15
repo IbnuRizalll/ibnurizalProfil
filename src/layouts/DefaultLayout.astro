@@ -178,11 +178,7 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
       }}
     />
 
-    {
-      structuredDataGraph.map((item) => (
-        <script type="application/ld+json" is:inline set:html={JSON.stringify(item)} />
-      ))
-    }
+    {structuredDataGraph.map((item) => <script type="application/ld+json" is:inline set:html={JSON.stringify(item)} />)}
 
     <!-- Enable Astro View Transitions for all browsers -->
     <ClientRouter />
@@ -340,10 +336,9 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
       }
 
       body {
-        margin: 0;
         display: flex;
         flex-direction: column;
-        overflow-x: clip;
+        margin: 0;
         background:
           radial-gradient(
             circle at 0% -12%,
@@ -356,6 +351,7 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
             transparent 35%
           ),
           linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
+        overflow-x: clip;
 
         main {
           flex: 1 0 auto;
@@ -392,7 +388,20 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
         min-inline-size: 0;
       }
 
-      :where(main h1, main h2, main h3, main h4, main h5, main h6, main p, main li, main dd, main dt, main blockquote, main code) {
+      :where(
+        main h1,
+        main h2,
+        main h3,
+        main h4,
+        main h5,
+        main h6,
+        main p,
+        main li,
+        main dd,
+        main dt,
+        main blockquote,
+        main code
+      ) {
         overflow-wrap: anywhere;
       }
 
@@ -402,9 +411,24 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
         }
       }
 
+      :is(.featured-posts, .featured-projects, .blog-list, .portfolio-list, .portfolio-tag-list) .card {
+        box-shadow:
+          0 20px 40px color-mix(in oklab, black 18%, transparent),
+          0 0 0 1px color-mix(in oklab, var(--brand-neutral) 18%, transparent);
+        border-color: color-mix(in oklab, var(--brand-neutral) 52%, var(--foreground-color) 48%);
+        background: light-dark(
+          color-mix(in oklab, white 94%, var(--brand-primary) 6%),
+          color-mix(in oklab, #121821 88%, var(--brand-neutral) 12%)
+        );
+      }
+
+      :is(.featured-posts, .featured-projects, .blog-list, .portfolio-list, .portfolio-tag-list) .card .content {
+        background: inherit;
+      }
+
       body.scroll-reveal-enabled [data-scroll-reveal] {
-        opacity: 0;
         transform: translate3d(0, 18px, 0) scale(0.995);
+        opacity: 0;
         filter: blur(2px);
         transition:
           opacity 430ms cubic-bezier(0.2, 0.72, 0.18, 1) var(--scroll-reveal-delay, 0ms),
@@ -414,15 +438,15 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
       }
 
       body.scroll-reveal-enabled [data-scroll-reveal].is-scroll-reveal-visible {
-        opacity: 1;
         transform: translate3d(0, 0, 0) scale(1);
+        opacity: 1;
         filter: blur(0);
       }
 
       @media (prefers-reduced-motion: reduce) {
         body.scroll-reveal-enabled [data-scroll-reveal] {
-          opacity: 1 !important;
           transform: none !important;
+          opacity: 1 !important;
           filter: none !important;
           transition: none !important;
         }
@@ -430,4 +454,3 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
     </style>
   </body>
 </html>
-
