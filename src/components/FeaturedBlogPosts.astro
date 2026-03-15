@@ -1,6 +1,5 @@
 ---
-import { Card, Heading, Link } from 'accessible-astro-components'
-import { Icon } from 'astro-icon/components'
+import HighlightShowcaseSlider from '@components/HighlightShowcaseSlider.astro'
 import { getBlogPosts, type BlogPost } from '@server/content/blog-posts'
 
 interface Props {
@@ -13,60 +12,32 @@ interface Props {
 const { class: className, limit = 3, title = 'Latest Blog Notes', posts: providedPosts } = Astro.props
 
 const postItems = Array.isArray(providedPosts) ? providedPosts : await getBlogPosts({ limit })
-const postImages = ['/posts/post-image-1.png', '/posts/post-image-2.png', '/posts/post-image-3.png']
+const postImages = [
+  '/posts/post-image-1.png',
+  '/posts/post-image-2.png',
+  '/posts/post-image-3.png',
+  '/posts/post-image-4.png',
+  '/posts/post-image-5.png',
+  '/posts/post-image-6.png',
+]
 
 const featuredPosts = postItems.map((post, index) => ({
-  ...post,
-  featuredImage: post.coverImageUrl || postImages[index % postImages.length],
+  id: post.id,
+  title: post.title,
+  description: post.description,
+  image: post.coverImageUrl || postImages[index % postImages.length],
+  url: '/blog/' + post.slug,
+  footer: 'By: ' + post.author,
+  tags: post.tags,
 }))
 ---
 
-<section class:list={[className, 'featured-posts my-20 md:my-28 lg:my-36']}>
-  <div class="container">
-    <Heading level="h2" class="mb-6">{title}</Heading>
-
-    {
-      featuredPosts.length > 0 ? (
-        <>
-          <div class="featured-grid">
-            {featuredPosts.map((post) => (
-              <Card
-                img={post.featuredImage}
-                url={'/blog/' + post.slug}
-                headingLevel="h2"
-                title={post.title}
-                footer={'By: ' + post.author}
-              >
-                {post.description}
-              </Card>
-            ))}
-          </div>
-          <div class="mt-12">
-            <Link href="/blog/" isButton animateOnHover animationType="nudge">
-              View all notes
-              <Icon aria-hidden="true" name="lucide:arrow-right" size="1.5rem" />
-            </Link>
-          </div>
-        </>
-      ) : (
-        <p>Tulisan masih kosong. next time aku isii.</p>
-      )
-    }
-  </div>
-</section>
-
-<style lang="scss" is:global>
-  .featured-posts .featured-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-    gap: clamp(1rem, 2.2vw, 1.5rem);
-  }
-
-  .featured-posts .featured-grid .card {
-    min-inline-size: 0;
-  }
-
-  .featured-posts .featured-grid :is(h2, h3, h4, p, a, span) {
-    overflow-wrap: anywhere;
-  }
-</style>
+<HighlightShowcaseSlider
+  class={className}
+  title={title}
+  items={featuredPosts}
+  linkHref="/blog/"
+  linkLabel="View all notes"
+  helperText="Geser preview tulisan untuk melihat highlight lain, atau pakai tombol panah."
+  emptyMessage="Tulisan masih kosong. Next time aku isii."
+/>

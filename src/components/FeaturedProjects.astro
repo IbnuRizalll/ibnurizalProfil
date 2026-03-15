@@ -1,86 +1,43 @@
 ---
-import { Card, Heading, Link } from 'accessible-astro-components'
-import { Icon } from 'astro-icon/components'
+import HighlightShowcaseSlider from '@components/HighlightShowcaseSlider.astro'
 import { getProjects, type PortfolioProject } from '@server/content/projects'
 
 interface Props {
-  /**
-   * Additional classes to apply to the section
-   */
   class?: string
-  /**
-   * The number of projects to display
-   * @default 3
-   */
   limit?: number
-  /**
-   * The title for the section
-   * @default "Proyek unggulan"
-   */
   title?: string
-  /**
-   * Optional prefetched projects to avoid duplicate server fetches.
-   */
   projects?: PortfolioProject[]
 }
 
 const { class: className, limit = 3, title = 'Proyek unggulan', projects: providedProjects } = Astro.props
 
 const projectItems = Array.isArray(providedProjects) ? providedProjects : await getProjects({ limit })
-const projectImages = ['/projects/project-image-1.png', '/projects/project-image-2.png', '/projects/project-image-3.png']
+const projectImages = [
+  '/projects/project-image-1.png',
+  '/projects/project-image-2.png',
+  '/projects/project-image-3.png',
+  '/projects/project-image-4.png',
+  '/projects/project-image-5.png',
+  '/projects/project-image-6.png',
+]
 
 const featuredProjects = projectItems.map((project, index) => ({
-  ...project,
-  featuredImage: project.coverImageUrl || projectImages[index % projectImages.length],
+  id: project.id,
+  title: project.title,
+  description: project.description,
+  image: project.coverImageUrl || projectImages[index % projectImages.length],
+  url: '/portfolio/' + project.slug,
+  footer: 'Peran: ' + project.author,
+  tags: project.tags,
 }))
 ---
 
-<section class:list={[className, 'featured-projects my-20 md:my-28 lg:my-36']}>
-  <div class="container">
-    <Heading level="h2" class="mb-6">{title}</Heading>
-
-    {
-      featuredProjects.length > 0 ? (
-        <>
-          <div class="featured-grid">
-            {featuredProjects.map((project) => (
-              <Card
-                img={project.featuredImage}
-                url={'/portfolio/' + project.slug}
-                headingLevel="h2"
-                title={project.title}
-                footer={'Peran: ' + project.author}
-              >
-                {project.description}
-              </Card>
-            ))}
-          </div>
-          <div class="mt-12">
-            <Link href="/portfolio/" isButton animateOnHover animationType="nudge">
-              View all projects
-              <Icon aria-hidden="true" name="lucide:arrow-right" size="1.5rem" />
-            </Link>
-          </div>
-        </>
-      ) : (
-        <p>Konten proyek sedang diperbarui. Silakan cek kembali dalam beberapa waktu.</p>
-      )
-    }
-  </div>
-</section>
-
-<style lang="scss" is:global>
-  .featured-projects .featured-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
-    gap: clamp(1rem, 2.2vw, 1.5rem);
-  }
-
-  .featured-projects .featured-grid .card {
-    min-inline-size: 0;
-  }
-
-  .featured-projects .featured-grid :is(h2, h3, h4, p, a, span) {
-    overflow-wrap: anywhere;
-  }
-</style>
+<HighlightShowcaseSlider
+  class={className}
+  title={title}
+  items={featuredProjects}
+  linkHref="/portfolio/"
+  linkLabel="View all projects"
+  helperText="Geser preview proyek untuk melihat semua highlight, atau pakai tombol panah."
+  emptyMessage="Konten proyek sedang diperbarui. Silakan cek kembali dalam beberapa waktu."
+/>

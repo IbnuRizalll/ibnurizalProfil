@@ -1,0 +1,672 @@
+---
+import { Heading, Link } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+import { slugify } from '@utils/slugify'
+
+interface HighlightSliderItem {
+  id: string
+  title: string
+  description: string
+  image: string
+  url: string
+  footer: string
+  tags?: string[]
+}
+
+interface Props {
+  class?: string
+  title: string
+  items: HighlightSliderItem[]
+  linkHref: string
+  linkLabel: string
+  emptyMessage: string
+  helperText?: string
+}
+
+const {
+  class: className,
+  title,
+  items,
+  linkHref,
+  linkLabel,
+  emptyMessage,
+  helperText = 'Geser preview untuk melihat item lain, atau pakai tombol panah.',
+} = Astro.props
+
+const sliderSlug = slugify(title || 'highlight-slider')
+const sliderId = `highlight-slider-${sliderSlug}`
+---
+
+<section class:list={[className, 'highlight-showcase my-20 md:my-28 lg:my-36']} data-scroll-reveal-disabled>
+  <div class="container">
+    <div class="showcase-header">
+      <div class="showcase-copy-head">
+        <Heading level="h2" class="showcase-title">{title}</Heading>
+        {items.length > 1 && <p class="showcase-helper">{helperText}</p>}
+      </div>
+
+      {
+        items.length > 1 && (
+          <div class="showcase-controls" aria-label={`Kontrol slider ${title}`}>
+            <button type="button" class="showcase-button" data-slider-prev aria-controls={sliderId}>
+              <Icon aria-hidden="true" name="lucide:arrow-left" size="1.1rem" />
+              <span class="sr-only">Item sebelumnya</span>
+            </button>
+            <div class="showcase-counter" aria-live="polite">
+              <span data-slider-current>01</span>
+              <span aria-hidden="true">/</span>
+              <span>{String(items.length).padStart(2, '0')}</span>
+            </div>
+            <button type="button" class="showcase-button" data-slider-next aria-controls={sliderId}>
+              <Icon aria-hidden="true" name="lucide:arrow-right" size="1.1rem" />
+              <span class="sr-only">Item berikutnya</span>
+            </button>
+          </div>
+        )
+      }
+    </div>
+
+    {
+      items.length > 0 ? (
+        <>
+          <div id={sliderId} class="showcase-shell" data-highlight-slider>
+            <div class="showcase-stage" data-slider-stage tabindex="0" aria-label={`${title} highlight slider`}>
+              {items.map((item, index) => (
+                <article
+                  class:list={['showcase-panel', { 'is-active': index === 0 }]}
+                  data-slider-panel
+                  data-index={index}
+                  aria-hidden={index === 0 ? 'false' : 'true'}
+                >
+                  <a class="showcase-panel-link" href={item.url}>
+                    <figure class="showcase-media">
+                      <img src={item.image} alt="" loading={index === 0 ? 'eager' : 'lazy'} decoding="async" />
+                    </figure>
+
+                    <div class="showcase-content">
+                      <div class="showcase-meta-row">
+                        <span class="showcase-index">{String(index + 1).padStart(2, '0')}</span>
+                        <span class="showcase-footer">{item.footer}</span>
+                      </div>
+
+                      {item.tags && item.tags.length > 0 && (
+                        <ul class="showcase-tags" aria-label="Tag konten">
+                          {item.tags.map((tag) => (
+                            <li>{tag}</li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <h3>{item.title}</h3>
+                      <p>{item.description}</p>
+
+                      <span class="showcase-link-label">
+                        Lihat detail
+                        <Icon aria-hidden="true" name="lucide:arrow-up-right" size="1rem" />
+                      </span>
+                    </div>
+                  </a>
+                </article>
+              ))}
+            </div>
+
+            {items.length > 1 && (
+              <div class="showcase-rail" data-slider-rail aria-label={`Preview ${title}`}>
+                {items.map((item, index) => (
+                  <button
+                    type="button"
+                    class:list={['showcase-preview', { 'is-active': index === 0 }]}
+                    data-slider-trigger
+                    data-index={index}
+                    aria-pressed={index === 0 ? 'true' : 'false'}
+                  >
+                    <span class="showcase-preview-image">
+                      <img src={item.image} alt="" loading="lazy" decoding="async" />
+                    </span>
+                    <span class="showcase-preview-copy">
+                      <span class="showcase-preview-title">{item.title}</span>
+                      <span class="showcase-preview-footer">{item.footer}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div class="mt-12">
+            <Link href={linkHref} isButton animateOnHover animationType="nudge">
+              {linkLabel}
+              <Icon aria-hidden="true" name="lucide:arrow-right" size="1.5rem" />
+            </Link>
+          </div>
+        </>
+      ) : (
+        <p>{emptyMessage}</p>
+      )
+    }
+  </div>
+</section>
+
+<script>
+  const setupHighlightSliders = () => {
+    const sliders = [...document.querySelectorAll('[data-highlight-slider]')].filter(
+      (slider) => slider instanceof HTMLElement && slider.dataset.sliderReady !== 'true',
+    )
+
+    sliders.forEach((slider) => {
+      if (!(slider instanceof HTMLElement)) return
+      slider.dataset.sliderReady = 'true'
+
+      const panels = [...slider.querySelectorAll('[data-slider-panel]')]
+      const triggers = [...slider.querySelectorAll('[data-slider-trigger]')]
+      const prevButton = slider.parentElement?.querySelector('[data-slider-prev]')
+      const nextButton = slider.parentElement?.querySelector('[data-slider-next]')
+      const currentCounter = slider.parentElement?.querySelector('[data-slider-current]')
+      const stage = slider.querySelector('[data-slider-stage]')
+      const total = panels.length
+
+      if (total === 0) return
+
+      let activeIndex = 0
+      let touchStartX = 0
+      let touchStartY = 0
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      const updateSlider = (nextIndex, shouldFocusTrigger = false) => {
+        activeIndex = (nextIndex + total) % total
+        slider.dataset.activeIndex = String(activeIndex)
+
+        panels.forEach((panel, index) => {
+          if (!(panel instanceof HTMLElement)) return
+          const isActive = index === activeIndex
+          panel.classList.toggle('is-active', isActive)
+          panel.setAttribute('aria-hidden', isActive ? 'false' : 'true')
+        })
+
+        triggers.forEach((trigger, index) => {
+          if (!(trigger instanceof HTMLElement)) return
+          const isActive = index === activeIndex
+          trigger.classList.toggle('is-active', isActive)
+          trigger.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+          trigger.tabIndex = isActive ? 0 : -1
+
+          if (isActive) {
+            trigger.scrollIntoView({
+              behavior: prefersReducedMotion ? 'auto' : 'smooth',
+              block: 'nearest',
+              inline: 'center',
+            })
+
+            if (shouldFocusTrigger) {
+              trigger.focus()
+            }
+          }
+        })
+
+        if (currentCounter instanceof HTMLElement) {
+          currentCounter.textContent = String(activeIndex + 1).padStart(2, '0')
+        }
+      }
+
+      triggers.forEach((trigger, index) => {
+        trigger.addEventListener('click', () => updateSlider(index))
+        trigger.addEventListener('keydown', (event) => {
+          if (!(event instanceof KeyboardEvent)) return
+          if (event.key === 'ArrowRight') {
+            event.preventDefault()
+            updateSlider(activeIndex + 1, true)
+          }
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault()
+            updateSlider(activeIndex - 1, true)
+          }
+          if (event.key === 'Home') {
+            event.preventDefault()
+            updateSlider(0, true)
+          }
+          if (event.key === 'End') {
+            event.preventDefault()
+            updateSlider(total - 1, true)
+          }
+        })
+      })
+
+      if (prevButton instanceof HTMLElement) {
+        prevButton.addEventListener('click', () => updateSlider(activeIndex - 1, true))
+      }
+
+      if (nextButton instanceof HTMLElement) {
+        nextButton.addEventListener('click', () => updateSlider(activeIndex + 1, true))
+      }
+
+      if (stage instanceof HTMLElement) {
+        stage.addEventListener('keydown', (event) => {
+          if (!(event instanceof KeyboardEvent)) return
+          if (event.key === 'ArrowRight') {
+            event.preventDefault()
+            updateSlider(activeIndex + 1)
+          }
+          if (event.key === 'ArrowLeft') {
+            event.preventDefault()
+            updateSlider(activeIndex - 1)
+          }
+        })
+
+        stage.addEventListener(
+          'touchstart',
+          (event) => {
+            const firstTouch = event.touches[0]
+            if (!firstTouch) return
+            touchStartX = firstTouch.clientX
+            touchStartY = firstTouch.clientY
+          },
+          { passive: true },
+        )
+
+        stage.addEventListener(
+          'touchend',
+          (event) => {
+            const firstTouch = event.changedTouches[0]
+            if (!firstTouch) return
+
+            const deltaX = firstTouch.clientX - touchStartX
+            const deltaY = firstTouch.clientY - touchStartY
+
+            if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return
+            updateSlider(activeIndex + (deltaX < 0 ? 1 : -1))
+          },
+          { passive: true },
+        )
+      }
+
+      updateSlider(0)
+    })
+  }
+
+  setupHighlightSliders()
+  document.addEventListener('astro:page-load', setupHighlightSliders)
+</script>
+
+<style lang="scss">
+  .highlight-showcase {
+    position: relative;
+  }
+
+  .showcase-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: end;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .showcase-copy-head {
+    display: grid;
+    gap: 0.45rem;
+  }
+
+  .showcase-title {
+    margin: 0;
+  }
+
+  .showcase-helper {
+    margin: 0;
+    max-width: 46rem;
+    color: color-mix(in oklab, var(--text-color) 74%, transparent);
+    font-size: 0.98rem;
+  }
+
+  .showcase-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 78%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--background-color) 76%, var(--brand-primary) 24%);
+    padding: 0.45rem;
+  }
+
+  .showcase-button {
+    display: inline-grid;
+    place-items: center;
+    transition:
+      transform 220ms ease,
+      background-color 220ms ease,
+      border-color 220ms ease,
+      box-shadow 220ms ease;
+    cursor: pointer;
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 80%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--background-color) 84%, var(--brand-neutral) 16%);
+    width: 2.75rem;
+    height: 2.75rem;
+    color: var(--text-color);
+  }
+
+  .showcase-button:hover,
+  .showcase-button:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px color-mix(in oklab, black 16%, transparent);
+    border-color: color-mix(in oklab, var(--brand-secondary) 48%, white 12%);
+    background: color-mix(in oklab, var(--background-color) 60%, var(--brand-secondary) 40%);
+  }
+
+  .showcase-counter {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 4.8rem;
+    color: color-mix(in oklab, var(--text-color) 78%, transparent);
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+
+  .showcase-shell {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .showcase-stage {
+    display: grid;
+    position: relative;
+    outline: none;
+    min-height: min(74vh, 36rem);
+  }
+
+  .showcase-panel {
+    grid-area: 1 / 1;
+    transform: translate3d(0, 18px, 0) scale(0.985);
+    visibility: hidden;
+    opacity: 0;
+    filter: blur(8px);
+    transition:
+      opacity 380ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      transform 420ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      filter 420ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    pointer-events: none;
+  }
+
+  .showcase-panel.is-active {
+    transform: translate3d(0, 0, 0) scale(1);
+    visibility: visible;
+    opacity: 1;
+    filter: blur(0);
+    pointer-events: auto;
+  }
+
+  .showcase-panel-link {
+    display: grid;
+    box-shadow:
+      0 26px 50px color-mix(in oklab, black 20%, transparent),
+      0 0 0 1px color-mix(in oklab, var(--brand-secondary) 12%, transparent);
+    border: 1px solid color-mix(in oklab, var(--brand-secondary) 28%, var(--border-color-subtle) 72%);
+    border-radius: clamp(1.25rem, 2vw, 1.6rem);
+    background: linear-gradient(
+      145deg,
+      color-mix(in oklab, var(--background-color) 84%, var(--brand-primary) 16%),
+      color-mix(in oklab, var(--background-color) 92%, black 8%)
+    );
+    height: 100%;
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .showcase-panel-link:hover .showcase-media img,
+  .showcase-panel-link:focus-visible .showcase-media img {
+    transform: scale(1.035);
+  }
+
+  .showcase-panel-link:hover .showcase-link-label,
+  .showcase-panel-link:focus-visible .showcase-link-label {
+    transform: translateX(4px);
+    color: color-mix(in oklab, var(--brand-secondary) 72%, white 28%);
+  }
+
+  .showcase-media {
+    position: relative;
+    margin: 0;
+    background: color-mix(in oklab, var(--background-color) 80%, black 20%);
+    min-height: 15rem;
+    overflow: hidden;
+  }
+
+  .showcase-media::after {
+    position: absolute;
+    inset: auto 0 0;
+    background: linear-gradient(to top, color-mix(in oklab, black 45%, transparent), transparent);
+    height: 42%;
+    pointer-events: none;
+    content: '';
+  }
+
+  .showcase-media img {
+    transition: transform 480ms cubic-bezier(0.2, 0.7, 0.2, 1);
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .showcase-content {
+    display: grid;
+    align-content: start;
+    gap: 0.9rem;
+    padding: clamp(1.1rem, 2.2vw, 1.6rem);
+  }
+
+  .showcase-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.8rem;
+    color: color-mix(in oklab, var(--text-color) 76%, transparent);
+    font-size: 0.93rem;
+  }
+
+  .showcase-index {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--brand-secondary) 28%, var(--background-color) 72%);
+    padding: 0.28rem 0.6rem;
+    min-width: 2.6rem;
+    color: color-mix(in oklab, white 88%, var(--text-color) 12%);
+    font-weight: 800;
+    letter-spacing: 0.04em;
+  }
+
+  .showcase-footer {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .showcase-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .showcase-tags li {
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 80%, transparent);
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--background-color) 84%, var(--brand-neutral) 16%);
+    padding: 0.38rem 0.7rem;
+    font-weight: 700;
+    font-size: 0.82rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .showcase-content h3 {
+    margin: 0;
+    font-size: clamp(1.45rem, 1.8vw, 2rem);
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+
+  .showcase-content p {
+    margin: 0;
+    color: color-mix(in oklab, var(--text-color) 82%, transparent);
+    font-size: clamp(0.98rem, 1.06vw, 1.08rem);
+    line-height: 1.75;
+    overflow-wrap: anywhere;
+  }
+
+  .showcase-link-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    transition:
+      transform 220ms ease,
+      color 220ms ease;
+    margin-top: auto;
+    color: color-mix(in oklab, var(--text-color) 86%, transparent);
+    font-weight: 700;
+  }
+
+  .showcase-rail {
+    display: grid;
+    grid-auto-columns: minmax(15rem, 82%);
+    grid-auto-flow: column;
+    gap: 0.85rem;
+    padding-bottom: 0.35rem;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .showcase-preview {
+    display: grid;
+    grid-template-columns: 5.25rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.8rem;
+    opacity: 0.66;
+    transition:
+      opacity 220ms ease,
+      transform 220ms ease,
+      border-color 220ms ease,
+      box-shadow 220ms ease,
+      background-color 220ms ease;
+    cursor: pointer;
+    border: 1px solid color-mix(in oklab, var(--border-color-subtle) 74%, transparent);
+    border-radius: 1rem;
+    background: color-mix(in oklab, var(--background-color) 82%, var(--brand-primary) 18%);
+    padding: 0.7rem;
+    min-width: 0;
+    scroll-snap-align: start;
+    color: inherit;
+    text-align: left;
+  }
+
+  .showcase-preview:hover,
+  .showcase-preview:focus-visible,
+  .showcase-preview.is-active {
+    transform: translateY(-1px);
+    opacity: 1;
+    box-shadow: 0 16px 28px color-mix(in oklab, black 16%, transparent);
+    border-color: color-mix(in oklab, var(--brand-secondary) 45%, white 12%);
+    background: color-mix(in oklab, var(--background-color) 66%, var(--brand-secondary) 34%);
+  }
+
+  .showcase-preview-image {
+    display: block;
+    border-radius: 0.8rem;
+    background: color-mix(in oklab, var(--background-color) 76%, black 24%);
+    aspect-ratio: 1;
+    overflow: hidden;
+  }
+
+  .showcase-preview-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .showcase-preview-copy {
+    display: grid;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .showcase-preview-title,
+  .showcase-preview-footer {
+    overflow-wrap: anywhere;
+  }
+
+  .showcase-preview-title {
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  .showcase-preview-footer {
+    color: color-mix(in oklab, var(--text-color) 72%, transparent);
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  @media (min-width: 52rem) {
+    .showcase-panel-link {
+      grid-template-columns: minmax(0, 1.08fr) minmax(20rem, 0.92fr);
+    }
+
+    .showcase-media {
+      min-height: 100%;
+    }
+  }
+
+  @media (min-width: 70rem) {
+    .showcase-shell {
+      grid-template-columns: minmax(0, 1.36fr) minmax(19rem, 0.74fr);
+      align-items: stretch;
+    }
+
+    .showcase-rail {
+      grid-template-columns: 1fr;
+      grid-auto-rows: minmax(0, 1fr);
+      grid-auto-columns: auto;
+      grid-auto-flow: row;
+      padding-right: 0.3rem;
+      padding-bottom: 0;
+      max-height: min(74vh, 36rem);
+      overflow-x: visible;
+      overflow-y: auto;
+      scroll-snap-type: y proximity;
+    }
+
+    .showcase-preview {
+      grid-template-columns: 5rem minmax(0, 1fr);
+      scroll-snap-align: start;
+    }
+  }
+
+  @media (max-width: 47.99rem) {
+    .showcase-header {
+      align-items: start;
+    }
+
+    .showcase-controls {
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .showcase-stage {
+      min-height: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .showcase-button,
+    .showcase-panel,
+    .showcase-media img,
+    .showcase-link-label,
+    .showcase-preview {
+      transition: none;
+    }
+  }
+</style>
