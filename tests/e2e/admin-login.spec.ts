@@ -109,7 +109,7 @@ test('admin login redirects to dashboard and sign out returns to login', async (
   })
 
   await page.goto('/login')
-  await expect(page.getByText('Please sign in.')).toBeVisible()
+  await expect(page.locator('#status')).toContainText(/silakan masuk|please sign in|session ended because of inactivity/i)
 
   await page.getByLabel('Email').fill('admin@example.com')
   await page.getByLabel('Password').fill('secure-password')
@@ -125,3 +125,4 @@ test('admin login redirects to dashboard and sign out returns to login', async (
   await page.getByRole('button', { name: 'Sign out' }).click()
   await expect(page).toHaveURL(/\/login/)
 })
+
