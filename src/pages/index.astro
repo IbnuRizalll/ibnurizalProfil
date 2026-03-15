@@ -4,7 +4,7 @@ import Hero from '@components/Hero.astro'
 import FeaturedProjects from '@components/FeaturedProjects.astro'
 import FeaturedBlogPosts from '@components/FeaturedBlogPosts.astro'
 import AboutTerminal from '@components/AboutTerminal.astro'
-import { getSiteSettings } from '@utils/site-settings'
+import { getSiteSettings } from '@server/content/site-settings'
 import { Heading } from 'accessible-astro-components'
 
 const siteSettings = await getSiteSettings()

@@ -2,8 +2,8 @@
 import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Heading, Notification } from 'accessible-astro-components'
-import { getProjects } from '@utils/projects'
-import { getBlogPosts } from '@utils/blog-posts'
+import { getProjects } from '@server/content/projects'
+import { getBlogPosts } from '@server/content/blog-posts'
 
 const projects = await getProjects()
 const blogPosts = await getBlogPosts()

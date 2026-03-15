@@ -2,8 +2,8 @@
 import { Launcher, LauncherPreferences, LauncherSwitch, LauncherNav, LauncherLink } from 'accessible-astro-launcher'
 import { Icon } from 'astro-icon/components'
 import themeConfig from '@theme-config'
-import { getProjects } from '@utils/projects'
-import { getBlogPosts } from '@utils/blog-posts'
+import { getProjects } from '@server/content/projects'
+import { getBlogPosts } from '@server/content/blog-posts'
 
 // Package typings are stricter than runtime usage for slotted children.
 const LauncherAny = Launcher as any

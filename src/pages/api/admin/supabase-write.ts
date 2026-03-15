@@ -8,7 +8,7 @@ import {
   hasValidCsrfToken,
   hasJsonContentType,
   jsonResponse,
-} from '@utils/api-security'
+} from '@server/security/api-security'
 import {
   getBearerToken,
   getSupabaseServerConfig,
@@ -16,7 +16,7 @@ import {
   readJsonSafe,
   readResponseError,
   verifySupabaseAccessToken,
-} from '@utils/supabase-server'
+} from '@server/supabase/server'
 
 type WriteAction = 'insert' | 'update' | 'upsert' | 'delete'
 type FilterOperator = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'like' | 'ilike' | 'is' | 'in'

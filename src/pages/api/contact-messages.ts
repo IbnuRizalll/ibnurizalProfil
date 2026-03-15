@@ -8,8 +8,8 @@ import {
   hasValidCsrfToken,
   hasJsonContentType,
   jsonResponse,
-} from '@utils/api-security'
-import { getSupabaseServerConfig, readResponseError } from '@utils/supabase-server'
+} from '@server/security/api-security'
+import { getSupabaseServerConfig, readResponseError } from '@server/supabase/server'
 
 interface ContactPayload {
   full_name: string

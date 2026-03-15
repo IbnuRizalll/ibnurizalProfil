@@ -8,14 +8,14 @@ import {
   hasValidCsrfToken,
   hasMultipartContentType,
   jsonResponse,
-} from '@utils/api-security'
+} from '@server/security/api-security'
 import {
   getBearerToken,
   getSupabaseServerConfig,
   isAdminEmailAllowed,
   readResponseError,
   verifySupabaseAccessToken,
-} from '@utils/supabase-server'
+} from '@server/supabase/server'
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const IMAGE_EXTENSION_BY_MIME: Record<string, string> = {

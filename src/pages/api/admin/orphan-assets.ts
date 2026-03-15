@@ -8,7 +8,7 @@ import {
   isTrustedFetchSite,
   hasJsonContentType,
   jsonResponse,
-} from '@utils/api-security'
+} from '@server/security/api-security'
 import {
   getBearerToken,
   getSupabaseServerConfig,
@@ -16,8 +16,8 @@ import {
   readJsonSafe,
   readResponseError,
   verifySupabaseAccessToken,
-} from '@utils/supabase-server'
-import { getPrismaServerClient } from '@utils/prisma-server'
+} from '@server/supabase/server'
+import { getPrismaServerClient } from '@server/db/prisma-server'
 
 type AdminAssetAction = 'scan' | 'delete'
 

@@ -3,7 +3,7 @@ import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Badge, Card, Heading, Link, Pagination } from 'accessible-astro-components'
 import { slugify } from '@utils/slugify'
-import { getProjects } from '@utils/projects'
+import { getProjects } from '@server/content/projects'
 
 const PAGE_SIZE = 6
 const fallbackProjectImages = [

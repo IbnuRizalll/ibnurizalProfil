@@ -2,7 +2,7 @@
 import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Badge, Card, Pagination } from 'accessible-astro-components'
-import { getBlogPosts } from '@utils/blog-posts'
+import { getBlogPosts } from '@server/content/blog-posts'
 
 const PAGE_SIZE = 6
 const fallbackPostImages = [

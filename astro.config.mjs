@@ -47,6 +47,7 @@ const viteConfig = {
       '@post-images': fileURLToPath(new URL('./public/posts', import.meta.url)),
       '@project-images': fileURLToPath(new URL('./public/projects', import.meta.url)),
       '@utils': fileURLToPath(new URL('./src/utils', import.meta.url)),
+      '@server': fileURLToPath(new URL('./src/server', import.meta.url)),
       '@theme-config': fileURLToPath(new URL('./theme.config.ts', import.meta.url)),
     },
   },
@@ -68,3 +69,4 @@ export default defineConfig({
   ],
   vite: enhanceConfigForWorkspace(viteConfig),
 })
+
