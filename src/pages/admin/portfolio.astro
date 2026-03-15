@@ -323,6 +323,20 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         padding: 0.62rem 0.7rem;
       }
 
+      input[type='checkbox'] {
+        padding: 0;
+        width: 1.08rem;
+        height: 1.08rem;
+        accent-color: var(--brand-secondary);
+      }
+
+      .toggle-field {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.65rem;
+        font-weight: 700;
+      }
+
       .field-inline-meta {
         display: flex;
         justify-content: space-between;
@@ -611,6 +625,16 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
               <textarea id="description" required></textarea>
               <div class="field-inline-meta">
                 <span>Ringkasan project.</span><span id="description-count">0 chars</span>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="toggle-field" for="is-visible">
+                <input id="is-visible" type="checkbox" checked />
+                <span>Tampilkan di website publik</span>
+              </label>
+              <div class="field-inline-meta">
+                <span>Matikan opsi ini untuk hide tanpa menghapus data project.</span>
               </div>
             </div>
 

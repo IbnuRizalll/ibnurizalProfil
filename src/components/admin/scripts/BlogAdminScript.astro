@@ -47,6 +47,7 @@
     author: document.getElementById('author'),
     tags: document.getElementById('tags'),
     description: document.getElementById('description'),
+    isVisible: document.getElementById('is-visible'),
     coverImageUrl: document.getElementById('cover-image-url'),
   }
 
@@ -951,6 +952,34 @@
         renderContentBlocks()
       })
 
+      const toggleVisibilityButton = document.createElement('button')
+      toggleVisibilityButton.type = 'button'
+      toggleVisibilityButton.className = 'button small'
+      toggleVisibilityButton.textContent = project.is_visible === false ? 'Show' : 'Hide'
+      toggleVisibilityButton.addEventListener('click', async () => {
+        const nextVisibility = project.is_visible === false
+        const { error } = await adminWrite({
+          table: 'blog_posts',
+          action: 'update',
+          payload: {
+            is_visible: nextVisibility,
+            updated_at: new Date().toISOString(),
+          },
+          filters: [{ column: 'id', operator: 'eq', value: project.id }],
+        })
+        if (error) {
+          setStatus(error, 'error')
+          return
+        }
+
+        if (fields.id.value === project.id) {
+          fields.isVisible.checked = nextVisibility
+        }
+
+        setStatus(nextVisibility ? 'Post is visible on public pages.' : 'Post hidden from public pages.', 'success')
+        await loadPosts()
+      })
+
       const deleteButton = document.createElement('button')
       deleteButton.type = 'button'
       deleteButton.className = 'button small'
@@ -1149,6 +1178,7 @@
     fields.author.value = ''
     fields.tags.value = ''
     fields.description.value = ''
+    fields.isVisible.checked = true
     fields.coverImageUrl.value = ''
     contentBlocks = []
     clearSelectedAssetFiles()
@@ -1165,6 +1195,7 @@
     fields.author.value = project.author || ''
     fields.tags.value = formatTags(project.tags)
     fields.description.value = project.description || ''
+    fields.isVisible.checked = project.is_visible !== false
     fields.coverImageUrl.value = project.cover_image_url || ''
     contentBlocks = normalizeBlocks(project.content_blocks, project.body || '')
     clearSelectedAssetFiles()
@@ -1185,6 +1216,7 @@
         project.author,
         project.description,
         formatTags(project.tags),
+        project.is_visible === false ? 'hidden' : 'public',
         project.cover_image_url,
       ]
         .join(' ')
@@ -1203,7 +1235,7 @@
     )
 
     metricTotal.textContent = String(allPosts.length)
-    metricVisible.textContent = String(filteredPosts.length)
+    metricVisible.textContent = String(allPosts.filter((project) => project.is_visible !== false).length)
     metricAuthors.textContent = String(authorSet.size)
     metricTags.textContent = String(tagSet.size)
   }
@@ -1230,7 +1262,7 @@
 
       const meta = document.createElement('p')
       meta.className = 'project-meta'
-      meta.textContent = `slug: ${project.slug} | author: ${project.author || '-'} | updated: ${formatDate(project.updated_at)}`
+      meta.textContent = `slug: ${project.slug} | author: ${project.author || '-'} | visibility: ${project.is_visible === false ? 'hidden' : 'public'} | updated: ${formatDate(project.updated_at)}`
 
       const desc = document.createElement('p')
       desc.className = 'project-description'
@@ -1284,7 +1316,7 @@
         await loadPosts()
       })
 
-      actions.append(editButton, deleteButton)
+      actions.append(editButton, toggleVisibilityButton, deleteButton)
       li.append(title, meta, desc, tags, blockMeta, actions)
       projectList.appendChild(li)
     }
@@ -1297,7 +1329,7 @@
     const latestQuery = await supabase
       .from('blog_posts')
       .select(
-        'id, slug, title, author, description, tags, body, cover_image_url, content_blocks, created_at, updated_at',
+        'id, slug, title, author, description, tags, body, cover_image_url, content_blocks, is_visible, created_at, updated_at',
       )
       .order('updated_at', { ascending: false })
       .limit(LIST_FETCH_LIMIT)
@@ -1325,6 +1357,7 @@
       ...project,
       cover_image_url: project.cover_image_url || null,
       content_blocks: Array.isArray(project.content_blocks) ? project.content_blocks : [],
+      is_visible: project.is_visible !== false,
     }))
     const filteredPosts = computeFilteredPosts()
     renderProjects(filteredPosts)
@@ -1344,6 +1377,7 @@
     const author = fields.author.value.trim()
     const description = fields.description.value.trim()
     const tags = parseTags(fields.tags.value)
+    const isVisible = fields.isVisible.checked
     let coverImageUrl = fields.coverImageUrl.value.trim()
     const selectedCoverFile = coverImageFileInput.files && coverImageFileInput.files[0]
     const existingEntry = id
@@ -1401,6 +1435,7 @@
         author,
         description,
         tags,
+        is_visible: isVisible,
         body: legacyBody,
         cover_image_url: coverImageUrl || null,
         content_blocks: normalizedBlocks,
@@ -1430,7 +1465,11 @@
 
       if (error) {
         const normalizedMessage = String(error).toLowerCase()
-        if (normalizedMessage.includes('cover_image_url') || normalizedMessage.includes('content_blocks')) {
+        if (
+          normalizedMessage.includes('cover_image_url') ||
+          normalizedMessage.includes('content_blocks') ||
+          normalizedMessage.includes('is_visible')
+        ) {
           setStatus(
             'Kolom baru belum tersedia. Jalankan SQL terbaru di supabase/schema.sql (bagian blog_posts) lalu coba simpan lagi.',
             'error',

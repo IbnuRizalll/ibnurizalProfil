@@ -10,6 +10,7 @@ create table if not exists public.projects (
   body text not null default '',
   cover_image_url text,
   content_blocks jsonb not null default '[]'::jsonb,
+  is_visible boolean not null default true,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -23,6 +24,9 @@ alter table public.projects
 
 alter table public.projects
   add column if not exists content_blocks jsonb not null default '[]'::jsonb;
+
+alter table public.projects
+  add column if not exists is_visible boolean not null default true;
 
 create or replace function public.set_projects_updated_at()
 returns trigger
@@ -47,7 +51,7 @@ drop policy if exists "Public read projects" on public.projects;
 create policy "Public read projects"
   on public.projects
   for select
-  using (true);
+  using (coalesce(is_visible, true) = true);
 
 drop policy if exists "Authenticated insert projects" on public.projects;
 create policy "Authenticated insert projects"
@@ -81,6 +85,7 @@ create table if not exists public.blog_posts (
   body text not null default '',
   cover_image_url text,
   content_blocks jsonb not null default '[]'::jsonb,
+  is_visible boolean not null default true,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
@@ -94,6 +99,9 @@ alter table public.blog_posts
 
 alter table public.blog_posts
   add column if not exists content_blocks jsonb not null default '[]'::jsonb;
+
+alter table public.blog_posts
+  add column if not exists is_visible boolean not null default true;
 
 create or replace function public.set_blog_posts_updated_at()
 returns trigger
@@ -118,7 +126,7 @@ drop policy if exists "Public read blog_posts" on public.blog_posts;
 create policy "Public read blog_posts"
   on public.blog_posts
   for select
-  using (true);
+  using (coalesce(is_visible, true) = true);
 
 drop policy if exists "Authenticated insert blog_posts" on public.blog_posts;
 create policy "Authenticated insert blog_posts"

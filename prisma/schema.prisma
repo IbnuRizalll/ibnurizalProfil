@@ -18,6 +18,7 @@ model Project {
   body          String   @default("")
   coverImageUrl String?  @map("cover_image_url")
   contentBlocks Json     @default(dbgenerated("'[]'::jsonb")) @map("content_blocks")
+  isVisible     Boolean  @default(true) @map("is_visible")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 

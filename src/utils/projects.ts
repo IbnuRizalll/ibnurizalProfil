@@ -24,6 +24,7 @@ export interface PortfolioProject {
   body: string
   coverImageUrl: string | null
   contentBlocks: PortfolioContentBlock[]
+  isVisible: boolean
   createdAt: string | null
 }
 
@@ -31,10 +32,10 @@ type SupabaseProjectRow = SupabaseContentRow
 
 export const isSupabaseConfigured = sharedSupabaseConfigured
 
-const PROJECTS_LIST_LATEST_SELECT = 'id,slug,title,author,description,tags,cover_image_url,created_at'
+const PROJECTS_LIST_LATEST_SELECT = 'id,slug,title,author,description,tags,cover_image_url,is_visible,created_at'
 const PROJECTS_LIST_LEGACY_SELECT = 'id,slug,title,author,description,tags,created_at'
 const PROJECTS_DETAIL_LATEST_SELECT =
-  'id,slug,title,author,description,tags,body,cover_image_url,content_blocks,created_at'
+  'id,slug,title,author,description,tags,body,cover_image_url,content_blocks,is_visible,created_at'
 const PROJECTS_DETAIL_LEGACY_SELECT = 'id,slug,title,author,description,tags,body,created_at'
 
 interface GetProjectsOptions {
@@ -55,7 +56,9 @@ export async function getProjects(options: GetProjectsOptions = {}): Promise<Por
     cacheTtlMs,
   })
 
-  return rows.map((row) => normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled project' }))
+  return rows
+    .map((row) => normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled project' }))
+    .filter((project) => project.isVisible !== false)
 }
 
 export async function getProjectBySlug(slug: string): Promise<PortfolioProject | null> {
@@ -75,5 +78,6 @@ export async function getProjectBySlug(slug: string): Promise<PortfolioProject |
   const row = rows[0]
   if (!row) return null
 
-  return normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled project' })
+  const project = normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled project' })
+  return project.isVisible === false ? null : project
 }

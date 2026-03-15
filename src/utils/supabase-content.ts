@@ -34,6 +34,7 @@ export interface SupabaseContentRow {
   body: string | null
   cover_image_url?: string | null
   content_blocks?: unknown
+  is_visible?: boolean | null
   created_at: string | null
 }
 
@@ -47,6 +48,7 @@ export interface NormalizedContentEntity {
   body: string
   coverImageUrl: string | null
   contentBlocks: ContentBlock[]
+  isVisible: boolean
   createdAt: string | null
 }
 
@@ -86,8 +88,7 @@ const supabaseFetchDisabledEnv =
   import.meta.env.PUBLIC_SUPABASE_FETCH_DISABLED ??
   import.meta.env.SUPABASE_FETCH_DISABLED ??
   (typeof process !== 'undefined' ? process.env.SUPABASE_FETCH_DISABLED : undefined)
-const isSupabaseFetchDisabled =
-  supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
+const isSupabaseFetchDisabled = supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
 const supabaseStoragePublicBase = supabaseUrl
   ? `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${supabaseAssetsBucket}/`
   : ''
@@ -97,7 +98,18 @@ const supabaseCacheTtlEnv =
   (typeof process !== 'undefined' ? process.env.SUPABASE_CONTENT_CACHE_TTL_MS : undefined)
 const defaultCacheTtlMs = Math.max(0, Number.parseInt(String(supabaseCacheTtlEnv ?? '10000'), 10) || 10000)
 const MAX_CACHE_ENTRIES = 200
-const filterOperatorSet = new Set<FetchFilterOperator>(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'like', 'ilike', 'is', 'in'])
+const filterOperatorSet = new Set<FetchFilterOperator>([
+  'eq',
+  'neq',
+  'lt',
+  'lte',
+  'gt',
+  'gte',
+  'like',
+  'ilike',
+  'is',
+  'in',
+])
 const responseCache = new Map<string, CachedRows>()
 const inFlightRequests = new Map<string, Promise<unknown[] | null>>()
 
@@ -311,13 +323,12 @@ export function normalizeSupabaseContentEntity(
     body: row.body ?? '',
     coverImageUrl: normalizeAssetUrl(row.cover_image_url) || null,
     contentBlocks: normalizeContentBlocks(row.content_blocks),
+    isVisible: row.is_visible !== false,
     createdAt: row.created_at ?? null,
   }
 }
 
-export async function fetchSupabaseRows<Row>(
-  options: FetchSupabaseRowsOptions,
-): Promise<Row[]> {
+export async function fetchSupabaseRows<Row>(options: FetchSupabaseRowsOptions): Promise<Row[]> {
   if (isSupabaseFetchDisabled || !isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
     return []
   }

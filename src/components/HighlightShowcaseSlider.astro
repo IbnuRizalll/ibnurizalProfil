@@ -402,6 +402,8 @@ const sliderId = `highlight-slider-${sliderSlug}`
 
   .showcase-panel-link {
     display: grid;
+    grid-template-rows: clamp(16rem, 34vw, 25rem) auto;
+    align-items: stretch;
     box-shadow:
       0 26px 50px color-mix(in oklab, black 20%, transparent),
       0 0 0 1px color-mix(in oklab, var(--brand-secondary) 12%, transparent);
@@ -438,7 +440,8 @@ const sliderId = `highlight-slider-${sliderSlug}`
       radial-gradient(circle at top, color-mix(in oklab, var(--brand-secondary) 12%, transparent), transparent 58%),
       color-mix(in oklab, var(--background-color) 82%, black 18%);
     padding: clamp(0.85rem, 1.6vw, 1rem);
-    min-height: 15rem;
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
   }
 
@@ -625,11 +628,7 @@ const sliderId = `highlight-slider-${sliderSlug}`
 
   @media (min-width: 52rem) {
     .showcase-panel-link {
-      grid-template-columns: minmax(0, 1.04fr) minmax(21rem, 0.96fr);
-    }
-
-    .showcase-media {
-      min-height: 100%;
+      grid-template-rows: clamp(18rem, 30vw, 27rem) auto;
     }
   }
 

@@ -76,6 +76,7 @@ const TABLE_WRITE_COLUMNS: Record<AdminTable, Set<string>> = {
     'body',
     'cover_image_url',
     'content_blocks',
+    'is_visible',
     'created_at',
     'updated_at',
   ]),
@@ -89,6 +90,7 @@ const TABLE_WRITE_COLUMNS: Record<AdminTable, Set<string>> = {
     'body',
     'cover_image_url',
     'content_blocks',
+    'is_visible',
     'created_at',
     'updated_at',
   ]),
@@ -108,8 +110,8 @@ const TABLE_WRITE_COLUMNS: Record<AdminTable, Set<string>> = {
 
 const TABLE_FILTER_COLUMNS: Record<AdminTable, Set<string>> = {
   site_settings: new Set(['id']),
-  projects: new Set(['id', 'slug', 'author', 'created_at', 'updated_at']),
-  blog_posts: new Set(['id', 'slug', 'author', 'created_at', 'updated_at']),
+  projects: new Set(['id', 'slug', 'author', 'is_visible', 'created_at', 'updated_at']),
+  blog_posts: new Set(['id', 'slug', 'author', 'is_visible', 'created_at', 'updated_at']),
   contact_messages: new Set(['id', 'email', 'phone', 'is_read', 'replied_via', 'created_at', 'updated_at']),
 }
 
@@ -144,9 +146,7 @@ function sanitizeText(value: unknown, maxLength: number, allowNewLines = false):
 }
 
 function sanitizeSlug(value: unknown): string {
-  return sanitizeText(value, 140)
-    .toLowerCase()
-    .replace(/\s+/g, '-')
+  return sanitizeText(value, 140).toLowerCase().replace(/\s+/g, '-')
 }
 
 function sanitizeUuid(value: unknown): string {
@@ -195,11 +195,7 @@ function sanitizeAssetUrl(value: unknown, options: { allowNull?: boolean } = {})
 
 function sanitizeTags(value: unknown): string[] | undefined {
   if (value === undefined) return undefined
-  const source = Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? value.split(',')
-      : null
+  const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : null
 
   if (!source) return undefined
 
@@ -274,11 +270,7 @@ function sanitizeContentBlocks(raw: unknown): unknown[] | undefined {
         ? block.rows
             .slice(0, MAX_TABLE_ROWS)
             .map((row) =>
-              Array.isArray(row)
-                ? row
-                    .slice(0, MAX_TABLE_COLUMNS)
-                    .map((cell) => sanitizeText(cell, 400, true))
-                : [],
+              Array.isArray(row) ? row.slice(0, MAX_TABLE_COLUMNS).map((cell) => sanitizeText(cell, 400, true)) : [],
             )
             .filter((row) => row.length > 0 && row.some((cell) => cell.length > 0))
         : []
@@ -366,6 +358,11 @@ function sanitizeCommonContentPayload(
     const contentBlocks = sanitizeContentBlocks(input.content_blocks)
     if (contentBlocks === undefined) return { error: 'Invalid content blocks format.' }
     payload.content_blocks = contentBlocks
+  }
+
+  if ('is_visible' in input) {
+    if (typeof input.is_visible !== 'boolean') return { error: 'is_visible must be a boolean.' }
+    payload.is_visible = input.is_visible
   }
 
   if ('created_at' in input) {
@@ -692,11 +689,9 @@ export const POST: APIRoute = async ({ request }) => {
   })
 
   if (!rateLimit.allowed) {
-    return jsonResponse(
-      { error: 'Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi.' },
-      429,
-      { 'Retry-After': String(rateLimit.retryAfterSeconds) },
-    )
+    return jsonResponse({ error: 'Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi.' }, 429, {
+      'Retry-After': String(rateLimit.retryAfterSeconds),
+    })
   }
 
   const config = getSupabaseServerConfig()
@@ -764,12 +759,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  const method =
-    action === 'insert' || action === 'upsert'
-      ? 'POST'
-      : action === 'update'
-        ? 'PATCH'
-        : 'DELETE'
+  const method = action === 'insert' || action === 'upsert' ? 'POST' : action === 'update' ? 'PATCH' : 'DELETE'
 
   const prefer = action === 'upsert' ? 'resolution=merge-duplicates,return=representation' : 'return=representation'
 
