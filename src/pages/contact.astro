@@ -24,7 +24,7 @@ const instagramHref = 'https://www.instagram.com/ibnrrmm/'
   <section class="container">
     <div id="contact-form-wrapper" class="contact-grid grid grid-cols-1 md:grid-cols-2">
       <div class="space-content">
-        <form id="contact-form" class="form" name="contact" action="/thank-you" method="post" novalidate>
+        <form id="contact-form" class="form" name="contact" novalidate>
           <div class="hp-field" aria-hidden="true">
             <label for="website">Website</label>
             <input id="website" name="website" type="text" autocomplete="off" tabindex="-1" />
@@ -103,11 +103,20 @@ const instagramHref = 'https://www.instagram.com/ibnrrmm/'
 </DefaultLayout>
 
 <script type="module" is:inline>
-  const wrapper = document.getElementById('contact-form-wrapper')
-  const form = document.getElementById('contact-form')
-  const statusEl = document.getElementById('contact-form-status')
+  const initContactForm = () => {
+    const wrapper = document.getElementById('contact-form-wrapper')
+    const form = document.getElementById('contact-form')
+    const statusEl = document.getElementById('contact-form-status')
 
-  if (wrapper instanceof HTMLElement && form instanceof HTMLFormElement && statusEl instanceof HTMLElement) {
+    if (!(wrapper instanceof HTMLElement) || !(form instanceof HTMLFormElement) || !(statusEl instanceof HTMLElement)) {
+      return
+    }
+
+    if (form.dataset.contactEnhanced === 'true') {
+      return
+    }
+
+    form.dataset.contactEnhanced = 'true'
     const submitButton = form.querySelector('button[type="submit"]')
 
     const setStatus = (message, type = 'info') => {
@@ -197,8 +206,8 @@ const instagramHref = 'https://www.instagram.com/ibnrrmm/'
 
         setStatus('Pesan berhasil dikirim.', 'success')
         form.reset()
-        window.location.href = '/thank-you'
-      } catch (error) {
+        window.location.replace('/thank-you')
+      } catch {
         setStatus('Terjadi kendala koneksi. Silakan coba lagi beberapa saat lagi.', 'error')
       } finally {
         if (submitButton instanceof HTMLButtonElement) {
@@ -207,6 +216,9 @@ const instagramHref = 'https://www.instagram.com/ibnrrmm/'
       }
     })
   }
+
+  initContactForm()
+  document.addEventListener('astro:page-load', initContactForm)
 </script>
 
 <style lang="scss" is:global>
