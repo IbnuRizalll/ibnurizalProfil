@@ -3,6 +3,7 @@ import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import SocialShares from '@components/SocialShares.astro'
 import { Heading } from 'accessible-astro-components'
+import { parseStructuredTextSegments } from '@utils/structured-text'
 import { getBlogPostBySlug, type BlogContentBlock, type BlogPost } from '@server/content/blog-posts'
 
 const fallbackPostImages = [
@@ -120,7 +121,29 @@ const blogPostStructuredData = isNotFound
         contentBlocks.length > 0 ? (
           contentBlocks.map((block) =>
             block.type === 'paragraph' ? (
-              <p>{block.text}</p>
+              <div class="article-text-block">
+                {parseStructuredTextSegments(block.text).map((segment) =>
+                  segment.type === 'list' ? (
+                    segment.ordered ? (
+                      <ol class="article-list">
+                        {segment.items.map((item) => (
+                          <li>{item}</li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <ul class="article-list">
+                        {segment.items.map((item) => (
+                          <li>{item}</li>
+                        ))}
+                      </ul>
+                    )
+                  ) : segment.type === 'label' ? (
+                    <p class="article-list-label">{segment.text}</p>
+                  ) : (
+                    <p>{segment.text}</p>
+                  ),
+                )}
+              </div>
             ) : block.type === 'image' ? (
               <figure>
                 <img src={block.url} alt={block.alt || ''} loading="lazy" decoding="async" />
