@@ -13,6 +13,7 @@ export default [
       'dist/**',
       'node_modules/**',
       '.astro/**',
+      '.vercel/**',
       '**/*.d.ts', // Ignore generated TypeScript declaration files
     ],
   },
@@ -117,3 +118,4 @@ export default [
     },
   },
 ]
+
