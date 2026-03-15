@@ -380,6 +380,17 @@ const structuredDataGraph = [personSchema, websiteSchema, ...normalizedStructure
         border: 2px solid var(--link-color);
         border-radius: 0.35rem;
         padding: 1rem;
+        max-inline-size: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      :where(main, main > *, main .container, main section, main article, main [class*='grid']) {
+        min-inline-size: 0;
+      }
+
+      :where(main h1, main h2, main h3, main h4, main h5, main h6, main p, main li, main dd, main dt, main blockquote, main code) {
+        overflow-wrap: anywhere;
       }
 
       .card {

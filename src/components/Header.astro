@@ -23,11 +23,74 @@ import { HighContrast, ReducedMotion, SkipLink } from 'accessible-astro-componen
   <LauncherConfig />
 </header>
 
+<script>
+  declare global {
+    interface Window {
+      __siteHeaderCleanup?: (() => void) | undefined
+      __siteHeaderListenerBound?: boolean | undefined
+    }
+  }
+
+  const initSiteHeaderOffset = () => {
+    if (typeof window === 'undefined') return
+
+    if (typeof window.__siteHeaderCleanup === 'function') {
+      window.__siteHeaderCleanup()
+      window.__siteHeaderCleanup = undefined
+    }
+
+    const header = document.querySelector<HTMLElement>('.site-header')
+    if (!(header instanceof HTMLElement)) return
+
+    const root = document.documentElement
+    let rafId = 0
+
+    const syncOffset = () => {
+      rafId = 0
+      const nextOffset = Math.max(72, Math.ceil(header.getBoundingClientRect().height))
+      root.style.setProperty('--site-header-offset', `${nextOffset}px`)
+    }
+
+    const queueSync = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(syncOffset)
+    }
+
+    queueSync()
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(queueSync) : undefined
+    resizeObserver?.observe(header)
+
+    window.addEventListener('resize', queueSync, { passive: true })
+    window.addEventListener('orientationchange', queueSync)
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(queueSync).catch(() => {})
+    }
+
+    window.__siteHeaderCleanup = () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId)
+      }
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', queueSync)
+      window.removeEventListener('orientationchange', queueSync)
+    }
+  }
+
+  initSiteHeaderOffset()
+
+  if (!window.__siteHeaderListenerBound) {
+    document.addEventListener('astro:page-load', initSiteHeaderOffset)
+    window.__siteHeaderListenerBound = true
+  }
+</script>
+
 <style lang="scss" is:global>
   @use '@assets/scss/base/breakpoint' as *;
 
   :root {
-    --site-header-offset: clamp(4.85rem, 9vw, 7.2rem);
+    --site-header-offset: 5rem;
   }
 
   .site-header {

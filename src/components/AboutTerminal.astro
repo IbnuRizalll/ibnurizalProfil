@@ -507,6 +507,25 @@ const lines = (normalizedContent || fallbackContent).split('\n')
     }
   }
 
+  @media (max-width: 420px) {
+    .terminal-head {
+      padding-inline: 0.72rem;
+    }
+
+    .terminal-body {
+      padding: 0.78rem 0.75rem 0.95rem;
+    }
+
+    .terminal-command {
+      gap: 0.42rem;
+    }
+
+    .dot {
+      inline-size: 0.64rem;
+      block-size: 0.64rem;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .about-terminal,
     .terminal-line,

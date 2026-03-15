@@ -32,7 +32,7 @@ const {
           <slot><span class="text-gradient">Ibnu Rizal</span> Mutaqim</slot>
         </h1>
         <p class="max-w-prose text-center text-base sm:text-lg md:text-left md:text-xl">{description}</p>
-        <div class="hero-actions flex w-full flex-col gap-3 min-[500px]:w-auto min-[500px]:flex-row">
+        <div class="hero-actions flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <Link href="/portfolio" class="hero-cta" isButton type="primary" animateOnHover animationType="boop">
             <Icon aria-hidden="true" name="lucide:briefcase-business" size="1.5rem" />
             View Portfolio
@@ -253,7 +253,7 @@ const {
     inline-size: 100%;
   }
 
-  @media (min-width: 500px) {
+  @media (min-width: 640px) {
     .hero-actions .hero-cta {
       inline-size: auto;
     }

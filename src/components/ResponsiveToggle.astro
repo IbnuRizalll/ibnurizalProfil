@@ -71,9 +71,13 @@ const { class: className } = Astro.props
 
   .responsive-toggle {
     display: none;
+    align-items: center;
+    justify-content: center;
     border: none;
     background: transparent;
     padding: 0;
+    min-inline-size: fit-content;
+    white-space: nowrap;
 
     span {
       margin-inline-end: var(--space-3xs);
@@ -94,6 +98,16 @@ const { class: className } = Astro.props
         text-decoration-thickness: 1px;
         text-underline-offset: 7px;
       }
+    }
+  }
+
+  @media (max-width: 420px) {
+    .responsive-toggle {
+      font-size: 0.95rem;
+    }
+
+    .responsive-toggle svg {
+      width: 28px;
     }
   }
 </style>

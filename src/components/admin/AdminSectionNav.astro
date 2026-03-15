@@ -29,3 +29,23 @@ const sections: Array<{ key: AdminSectionKey; href: string; label: string }> = [
     ))
   }
 </nav>
+
+<style is:global>
+  .admin-section-nav {
+    min-inline-size: 0;
+  }
+
+  .admin-section-nav .nav-link {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    justify-content: center;
+    text-align: center;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 720px) {
+    .admin-section-nav .nav-link {
+      flex: 1 1 100%;
+    }
+  }
+</style>
