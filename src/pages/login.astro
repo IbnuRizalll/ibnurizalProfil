@@ -1,8 +1,12 @@
-﻿---
+---
 import themeConfig from '@theme-config'
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL ?? ''
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
+const rawAdminIdleTimeoutMinutes = Number.parseInt(import.meta.env.PUBLIC_ADMIN_IDLE_TIMEOUT_MINUTES ?? '20', 10)
+const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
+  ? Math.min(30, Math.max(15, rawAdminIdleTimeoutMinutes))
+  : 20
 ---
 
 <!doctype html>
@@ -52,9 +56,9 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
           ),
           linear-gradient(160deg, light-dark(#f8f9fd, #0f1318), light-dark(#edf1f7, #141a21));
         min-height: 100vh;
+        overflow-x: hidden;
         color: var(--text-color);
         line-height: 1.6;
-        overflow-x: hidden;
         font-family:
           Atkinson Hyperlegible,
           ui-sans-serif,
@@ -318,15 +322,17 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
       }
     </style>
   </head>
-  <body data-supabase-url={supabaseUrl} data-supabase-anon-key={supabaseAnonKey}>
+  <body
+    data-supabase-url={supabaseUrl}
+    data-supabase-anon-key={supabaseAnonKey}
+    data-admin-idle-timeout-minutes={adminIdleTimeoutMinutes}
+  >
     <main class="login-shell">
       <div class="login-layout">
         <section class="hero" aria-labelledby="admin-intro">
           <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
           <h1 id="admin-intro">Area terbatas untuk pengelolaan konten.</h1>
-          <p>
-            Halaman ini hanya untuk pengguna yang memiliki akses resmi.
-          </p>
+          <p>Halaman ini hanya untuk pengguna yang memiliki akses resmi.</p>
           <a class="back-link" href="/">Kembali ke website</a>
         </section>
 
@@ -372,6 +378,23 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
       const emailInput = document.getElementById('email')
       const passwordInput = document.getElementById('password')
       const togglePasswordButton = document.getElementById('toggle-password')
+      const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
+
+      function getNextAdminPath() {
+        const nextValue = new URLSearchParams(window.location.search).get('next') || '/admin/about'
+        if (!nextValue.startsWith('/admin') || nextValue.startsWith('//')) {
+          return '/admin/about'
+        }
+        return nextValue
+      }
+
+      function setAdminAccessCookie(isActive) {
+        const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+        const minutes = Number.isFinite(rawValue) ? Math.min(30, Math.max(15, rawValue)) : 20
+        const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+        const maxAge = isActive ? `; Max-Age=${minutes * 60}` : '; Max-Age=0'
+        document.cookie = `${ADMIN_ACCESS_COOKIE_NAME}=${isActive ? '1' : ''}; Path=/; SameSite=Strict${maxAge}${secure}`
+      }
 
       function setStatus(message, type = 'info') {
         statusEl.textContent = message
@@ -383,6 +406,7 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
         const key = body.dataset.supabaseAnonKey || ''
 
         if (!url || !key) {
+          setAdminAccessCookie(false)
           setStatus('Layanan autentikasi belum tersedia saat ini.', 'error')
           return
         }
@@ -393,9 +417,12 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
         } = await supabase.auth.getSession()
 
         if (session) {
-          window.location.href = '/admin/about'
+          setAdminAccessCookie(true)
+          window.location.replace(getNextAdminPath())
           return
         }
+
+        setAdminAccessCookie(false)
 
         const reason = new URLSearchParams(window.location.search).get('reason')
         if (reason === 'timeout') {
@@ -434,8 +461,9 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
             return
           }
 
+          setAdminAccessCookie(true)
           setStatus('Berhasil masuk. Mengalihkan halaman...', 'success')
-          window.location.href = '/admin/about'
+          window.location.replace(getNextAdminPath())
         })
       }
 
@@ -443,4 +471,3 @@ const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY ?? ''
     </script>
   </body>
 </html>
-

@@ -2,6 +2,7 @@ import { defineMiddleware } from 'astro:middleware'
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
 const CSRF_COOKIE_NAME = 'csrf_token'
+const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
 const CSRF_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 8
 
 const DEFAULT_SECURITY_HEADERS: Record<string, string> = {
@@ -28,8 +29,24 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const isLocal = LOCAL_HOSTS.has(context.url.hostname)
   const requestPath = context.url.pathname
   const isSensitivePath = requestPath === '/login' || requestPath.startsWith('/admin')
+  const acceptsHtml = context.request.headers.get('accept')?.includes('text/html') ?? false
+  const isAdminRootPath = requestPath === '/admin'
+  const isAdminPagePath = isAdminRootPath || requestPath.startsWith('/admin/')
 
-  if (context.request.method === 'GET' && context.request.headers.get('accept')?.includes('text/html')) {
+  if (context.request.method === 'GET' && acceptsHtml && isAdminPagePath) {
+    const hasAdminAccessCookie = context.cookies.get(ADMIN_ACCESS_COOKIE_NAME)?.value === '1'
+    const nextAdminPath = isAdminRootPath ? '/admin/about' : `${requestPath}${context.url.search}`
+
+    if (!hasAdminAccessCookie) {
+      return context.redirect(`/login?next=${encodeURIComponent(nextAdminPath)}`, 302)
+    }
+
+    if (isAdminRootPath) {
+      return context.redirect('/admin/about', 302)
+    }
+  }
+
+  if (context.request.method === 'GET' && acceptsHtml) {
     const existingToken = context.cookies.get(CSRF_COOKIE_NAME)?.value
     if (!existingToken) {
       context.cookies.set(CSRF_COOKIE_NAME, crypto.randomUUID(), {

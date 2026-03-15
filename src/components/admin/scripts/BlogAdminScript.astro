@@ -1,1398 +1,1422 @@
-    <script type="module" is:inline>
-      import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+<script type="module" is:inline>
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 
-      const body = document.body
-      const statusEl = document.getElementById('status')
-      const appSection = document.getElementById('app-section')
-      const logoutButton = document.getElementById('logout-button')
-      const projectForm = document.getElementById('project-form')
-      const projectList = document.getElementById('project-list')
-      const refreshButton = document.getElementById('refresh-button')
-      const resetButton = document.getElementById('reset-button')
-      const saveButton = document.getElementById('save-button')
-      const searchInput = document.getElementById('search-input')
-      const slugPreview = document.getElementById('slug-preview')
-      const descriptionCount = document.getElementById('description-count')
-      const blockCount = document.getElementById('block-count')
-      const coverImageFileInput = document.getElementById('cover-image-file')
-      const contentBlockList = document.getElementById('content-block-list')
-      const addParagraphBlockButton = document.getElementById('add-paragraph-block')
-      const addImageBlockButton = document.getElementById('add-image-block')
-      const addTableBlockButton = document.getElementById('add-table-block')
+  const body = document.body
+  const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
 
-      const metricTotal = document.getElementById('metric-total')
-      const metricVisible = document.getElementById('metric-visible')
-      const metricAuthors = document.getElementById('metric-authors')
-      const metricTags = document.getElementById('metric-tags')
+  function setAdminAccessCookie(isActive) {
+    const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+    const minutes = Number.isFinite(rawValue) ? Math.min(30, Math.max(15, rawValue)) : 20
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+    const maxAge = isActive ? `; Max-Age=${minutes * 60}` : '; Max-Age=0'
+    document.cookie = `${ADMIN_ACCESS_COOKIE_NAME}=${isActive ? '1' : ''}; Path=/; SameSite=Strict${maxAge}${secure}`
+  }
 
-      const fields = {
-        id: document.getElementById('project-id'),
-        title: document.getElementById('title'),
-        slug: document.getElementById('slug'),
-        author: document.getElementById('author'),
-        tags: document.getElementById('tags'),
-        description: document.getElementById('description'),
-        coverImageUrl: document.getElementById('cover-image-url'),
-      }
+  function redirectToLogin() {
+    setAdminAccessCookie(false)
+    window.location.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`)
+  }
 
-      const SITE_ASSETS_BUCKET = body.dataset.supabaseAssetsBucket || 'site-assets'
-      const ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT = 20
-      const ADMIN_IDLE_TIMEOUT_MINUTES_MIN = 15
-      const ADMIN_IDLE_TIMEOUT_MINUTES_MAX = 30
-      const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
-      const ADMIN_ACTIVITY_THROTTLE_MS = 5000
-      const MAX_ASSET_INPUT_BYTES = 20 * 1024 * 1024
-      const MAX_ASSET_UPLOAD_BYTES = 2 * 1024 * 1024
-      const MAX_TABLE_IMPORT_BYTES = 10 * 1024 * 1024
-      const LIST_FETCH_LIMIT = 200
-      const SEARCH_DEBOUNCE_MS = 180
-      const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-      const IMAGE_COMPRESSION_PLANS = [
-        { mime: 'image/webp', maxWidth: 1920, maxHeight: 1920, quality: 0.82 },
-        { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.74 },
-        { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
-        { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
-        { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
-        { mime: 'image/jpeg', maxWidth: 1024, maxHeight: 1024, quality: 0.6 },
-        { mime: 'image/jpeg', maxWidth: 800, maxHeight: 800, quality: 0.54 },
-      ]
+  const statusEl = document.getElementById('status')
+  const appSection = document.getElementById('app-section')
+  const logoutButton = document.getElementById('logout-button')
+  const projectForm = document.getElementById('project-form')
+  const projectList = document.getElementById('project-list')
+  const refreshButton = document.getElementById('refresh-button')
+  const resetButton = document.getElementById('reset-button')
+  const saveButton = document.getElementById('save-button')
+  const searchInput = document.getElementById('search-input')
+  const slugPreview = document.getElementById('slug-preview')
+  const descriptionCount = document.getElementById('description-count')
+  const blockCount = document.getElementById('block-count')
+  const coverImageFileInput = document.getElementById('cover-image-file')
+  const contentBlockList = document.getElementById('content-block-list')
+  const addParagraphBlockButton = document.getElementById('add-paragraph-block')
+  const addImageBlockButton = document.getElementById('add-image-block')
+  const addTableBlockButton = document.getElementById('add-table-block')
 
-      let slugDirty = false
-      let supabase
-      let accessToken = ''
-      let allPosts = []
-      let contentBlocks = []
-      let xlsxModulePromise = null
-      let idleTimeoutTimer = 0
-      let lastActivityAt = 0
-      let isSigningOutForTimeout = false
-      let stopSessionTimeoutGuard = () => {}
+  const metricTotal = document.getElementById('metric-total')
+  const metricVisible = document.getElementById('metric-visible')
+  const metricAuthors = document.getElementById('metric-authors')
+  const metricTags = document.getElementById('metric-tags')
 
-      function getIdleTimeoutMinutes() {
-        const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
-        if (!Number.isFinite(rawValue)) return ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT
-        return Math.min(ADMIN_IDLE_TIMEOUT_MINUTES_MAX, Math.max(ADMIN_IDLE_TIMEOUT_MINUTES_MIN, rawValue))
-      }
+  const fields = {
+    id: document.getElementById('project-id'),
+    title: document.getElementById('title'),
+    slug: document.getElementById('slug'),
+    author: document.getElementById('author'),
+    tags: document.getElementById('tags'),
+    description: document.getElementById('description'),
+    coverImageUrl: document.getElementById('cover-image-url'),
+  }
 
-      const ADMIN_IDLE_TIMEOUT_MS = getIdleTimeoutMinutes() * 60 * 1000
+  const SITE_ASSETS_BUCKET = body.dataset.supabaseAssetsBucket || 'site-assets'
+  const ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT = 20
+  const ADMIN_IDLE_TIMEOUT_MINUTES_MIN = 15
+  const ADMIN_IDLE_TIMEOUT_MINUTES_MAX = 30
+  const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
+  const ADMIN_ACTIVITY_THROTTLE_MS = 5000
+  const MAX_ASSET_INPUT_BYTES = 20 * 1024 * 1024
+  const MAX_ASSET_UPLOAD_BYTES = 2 * 1024 * 1024
+  const MAX_TABLE_IMPORT_BYTES = 10 * 1024 * 1024
+  const LIST_FETCH_LIMIT = 200
+  const SEARCH_DEBOUNCE_MS = 180
+  const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+  const IMAGE_COMPRESSION_PLANS = [
+    { mime: 'image/webp', maxWidth: 1920, maxHeight: 1920, quality: 0.82 },
+    { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.74 },
+    { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
+    { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
+    { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
+    { mime: 'image/jpeg', maxWidth: 1024, maxHeight: 1024, quality: 0.6 },
+    { mime: 'image/jpeg', maxWidth: 800, maxHeight: 800, quality: 0.54 },
+  ]
 
-      function setStatus(message, type = 'info') {
-        statusEl.textContent = message
-        statusEl.className = `status ${type}`
-      }
+  let slugDirty = false
+  let supabase
+  let accessToken = ''
+  let allPosts = []
+  let contentBlocks = []
+  let xlsxModulePromise = null
+  let idleTimeoutTimer = 0
+  let lastActivityAt = 0
+  let isSigningOutForTimeout = false
+  let stopSessionTimeoutGuard = () => {}
 
-      function clearIdleTimeoutTimer() {
-        if (idleTimeoutTimer) {
-          window.clearTimeout(idleTimeoutTimer)
-          idleTimeoutTimer = 0
-        }
-      }
+  function getIdleTimeoutMinutes() {
+    const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+    if (!Number.isFinite(rawValue)) return ADMIN_IDLE_TIMEOUT_MINUTES_DEFAULT
+    return Math.min(ADMIN_IDLE_TIMEOUT_MINUTES_MAX, Math.max(ADMIN_IDLE_TIMEOUT_MINUTES_MIN, rawValue))
+  }
 
-      function clearStoredAdminActivity() {
-        try {
-          window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY)
-        } catch {}
-      }
+  const ADMIN_IDLE_TIMEOUT_MS = getIdleTimeoutMinutes() * 60 * 1000
 
-      function readStoredActivity() {
-        try {
-          const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY)
-          if (!rawValue) return 0
-          const parsed = Number.parseInt(rawValue, 10)
-          return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-        } catch {
-          return 0
-        }
-      }
+  function setStatus(message, type = 'info') {
+    statusEl.textContent = message
+    statusEl.className = `status ${type}`
+  }
 
-      function writeStoredActivity(timestamp) {
-        try {
-          window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(timestamp))
-        } catch {}
-      }
+  function clearIdleTimeoutTimer() {
+    if (idleTimeoutTimer) {
+      window.clearTimeout(idleTimeoutTimer)
+      idleTimeoutTimer = 0
+    }
+  }
 
-      async function signOutByInactivity() {
-        if (isSigningOutForTimeout) return
-        isSigningOutForTimeout = true
-        stopSessionTimeoutGuard()
-        clearIdleTimeoutTimer()
-        setStatus(`Session expired after ${getIdleTimeoutMinutes()} minutes of inactivity. Please sign in again.`, 'info')
+  function clearStoredAdminActivity() {
+    try {
+      window.localStorage.removeItem(ADMIN_ACTIVITY_STORAGE_KEY)
+    } catch {}
+  }
 
-        try {
-          await supabase.auth.signOut()
-        } catch {}
+  function readStoredActivity() {
+    try {
+      const rawValue = window.localStorage.getItem(ADMIN_ACTIVITY_STORAGE_KEY)
+      if (!rawValue) return 0
+      const parsed = Number.parseInt(rawValue, 10)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+    } catch {
+      return 0
+    }
+  }
 
-        window.location.href = '/login?reason=timeout'
-      }
+  function writeStoredActivity(timestamp) {
+    try {
+      window.localStorage.setItem(ADMIN_ACTIVITY_STORAGE_KEY, String(timestamp))
+    } catch {}
+  }
 
-      function scheduleIdleTimeout() {
-        clearIdleTimeoutTimer()
-        const now = Date.now()
-        const referenceActivityAt = Math.max(lastActivityAt, readStoredActivity())
-        const idleDurationMs = referenceActivityAt > 0 ? now - referenceActivityAt : 0
-        const remainingMs = ADMIN_IDLE_TIMEOUT_MS - idleDurationMs
+  async function signOutByInactivity() {
+    if (isSigningOutForTimeout) return
+    isSigningOutForTimeout = true
+    stopSessionTimeoutGuard()
+    clearIdleTimeoutTimer()
+    setStatus(`Session expired after ${getIdleTimeoutMinutes()} minutes of inactivity. Please sign in again.`, 'info')
 
-        if (remainingMs <= 0) {
-          void signOutByInactivity()
-          return
-        }
+    try {
+      await supabase.auth.signOut()
+    } catch {}
 
-        idleTimeoutTimer = window.setTimeout(() => {
-          void signOutByInactivity()
-        }, remainingMs + 250)
-      }
+    setAdminAccessCookie(false)
+    window.location.replace('/login?reason=timeout')
+  }
 
-      function noteActivity(force = false) {
-        const now = Date.now()
-        if (!force && now - lastActivityAt < ADMIN_ACTIVITY_THROTTLE_MS) {
-          return
-        }
+  function scheduleIdleTimeout() {
+    clearIdleTimeoutTimer()
+    const now = Date.now()
+    const referenceActivityAt = Math.max(lastActivityAt, readStoredActivity())
+    const idleDurationMs = referenceActivityAt > 0 ? now - referenceActivityAt : 0
+    const remainingMs = ADMIN_IDLE_TIMEOUT_MS - idleDurationMs
 
-        lastActivityAt = now
-        writeStoredActivity(now)
-        scheduleIdleTimeout()
-      }
+    if (remainingMs <= 0) {
+      void signOutByInactivity()
+      return
+    }
 
-      function startSessionTimeoutGuard() {
-        stopSessionTimeoutGuard()
-        const lightActivityListener = () => noteActivity(false)
-        const strongActivityListener = () => noteActivity(true)
-        const visibilityListener = () => {
-          if (document.visibilityState === 'visible') {
-            noteActivity(true)
-          }
-        }
-        const storageListener = (event) => {
-          if (event.key !== ADMIN_ACTIVITY_STORAGE_KEY) return
-          const nextValue = Number.parseInt(event.newValue || '', 10)
-          if (!Number.isFinite(nextValue) || nextValue <= 0) return
-          if (nextValue > lastActivityAt) {
-            lastActivityAt = nextValue
-            scheduleIdleTimeout()
-          }
-        }
+    idleTimeoutTimer = window.setTimeout(() => {
+      void signOutByInactivity()
+    }, remainingMs + 250)
+  }
 
-        window.addEventListener('pointerdown', strongActivityListener, { passive: true })
-        window.addEventListener('touchstart', strongActivityListener, { passive: true })
-        window.addEventListener('keydown', strongActivityListener)
-        window.addEventListener('mousemove', lightActivityListener, { passive: true })
-        window.addEventListener('scroll', lightActivityListener, { passive: true })
-        document.addEventListener('visibilitychange', visibilityListener)
-        window.addEventListener('storage', storageListener)
+  function noteActivity(force = false) {
+    const now = Date.now()
+    if (!force && now - lastActivityAt < ADMIN_ACTIVITY_THROTTLE_MS) {
+      return
+    }
 
-        lastActivityAt = Math.max(Date.now(), readStoredActivity())
-        writeStoredActivity(lastActivityAt)
-        scheduleIdleTimeout()
+    lastActivityAt = now
+    writeStoredActivity(now)
+    scheduleIdleTimeout()
+  }
 
-        stopSessionTimeoutGuard = () => {
-          clearIdleTimeoutTimer()
-          window.removeEventListener('pointerdown', strongActivityListener)
-          window.removeEventListener('touchstart', strongActivityListener)
-          window.removeEventListener('keydown', strongActivityListener)
-          window.removeEventListener('mousemove', lightActivityListener)
-          window.removeEventListener('scroll', lightActivityListener)
-          document.removeEventListener('visibilitychange', visibilityListener)
-          window.removeEventListener('storage', storageListener)
-        }
-      }
-
-      async function refreshAccessToken() {
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession()
-
-        if (error || !session?.access_token) {
-          throw new Error('Sesi login tidak valid. Silakan login ulang.')
-        }
-
-        accessToken = session.access_token
-        return accessToken
-      }
-
-      async function authorizedApiRequest(endpoint, init = {}) {
+  function startSessionTimeoutGuard() {
+    stopSessionTimeoutGuard()
+    const lightActivityListener = () => noteActivity(false)
+    const strongActivityListener = () => noteActivity(true)
+    const visibilityListener = () => {
+      if (document.visibilityState === 'visible') {
         noteActivity(true)
-        const requestWithToken = async (token) => {
-          const headers = new Headers(init.headers || {})
-          headers.set('Authorization', `Bearer ${token}`)
-          const csrfTokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
-          if (csrfTokenMatch?.[1]) {
-            headers.set('X-CSRF-Token', decodeURIComponent(csrfTokenMatch[1]))
-          }
-          return fetch(endpoint, {
-            ...init,
-            headers,
-          })
-        }
+      }
+    }
+    const storageListener = (event) => {
+      if (event.key !== ADMIN_ACTIVITY_STORAGE_KEY) return
+      const nextValue = Number.parseInt(event.newValue || '', 10)
+      if (!Number.isFinite(nextValue) || nextValue <= 0) return
+      if (nextValue > lastActivityAt) {
+        lastActivityAt = nextValue
+        scheduleIdleTimeout()
+      }
+    }
 
-        const currentToken = accessToken || (await refreshAccessToken())
-        let response = await requestWithToken(currentToken)
+    window.addEventListener('pointerdown', strongActivityListener, { passive: true })
+    window.addEventListener('touchstart', strongActivityListener, { passive: true })
+    window.addEventListener('keydown', strongActivityListener)
+    window.addEventListener('mousemove', lightActivityListener, { passive: true })
+    window.addEventListener('scroll', lightActivityListener, { passive: true })
+    document.addEventListener('visibilitychange', visibilityListener)
+    window.addEventListener('storage', storageListener)
 
-        if (response.status === 401) {
-          const refreshedToken = await refreshAccessToken()
-          response = await requestWithToken(refreshedToken)
-        }
+    lastActivityAt = Math.max(Date.now(), readStoredActivity())
+    writeStoredActivity(lastActivityAt)
+    scheduleIdleTimeout()
 
-        noteActivity(false)
-        return response
+    stopSessionTimeoutGuard = () => {
+      clearIdleTimeoutTimer()
+      window.removeEventListener('pointerdown', strongActivityListener)
+      window.removeEventListener('touchstart', strongActivityListener)
+      window.removeEventListener('keydown', strongActivityListener)
+      window.removeEventListener('mousemove', lightActivityListener)
+      window.removeEventListener('scroll', lightActivityListener)
+      document.removeEventListener('visibilitychange', visibilityListener)
+      window.removeEventListener('storage', storageListener)
+    }
+  }
+
+  async function refreshAccessToken() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession()
+
+    if (error || !session?.access_token) {
+      throw new Error('Sesi login tidak valid. Silakan login ulang.')
+    }
+
+    accessToken = session.access_token
+    return accessToken
+  }
+
+  async function authorizedApiRequest(endpoint, init = {}) {
+    noteActivity(true)
+    const requestWithToken = async (token) => {
+      const headers = new Headers(init.headers || {})
+      headers.set('Authorization', `Bearer ${token}`)
+      const csrfTokenMatch = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)
+      if (csrfTokenMatch?.[1]) {
+        headers.set('X-CSRF-Token', decodeURIComponent(csrfTokenMatch[1]))
+      }
+      return fetch(endpoint, {
+        ...init,
+        headers,
+      })
+    }
+
+    const currentToken = accessToken || (await refreshAccessToken())
+    let response = await requestWithToken(currentToken)
+
+    if (response.status === 401) {
+      const refreshedToken = await refreshAccessToken()
+      response = await requestWithToken(refreshedToken)
+    }
+
+    noteActivity(false)
+    return response
+  }
+
+  async function adminWrite(body) {
+    try {
+      const response = await authorizedApiRequest('/api/admin/supabase-write', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      let responseBody = null
+      try {
+        responseBody = await response.json()
+      } catch {
+        responseBody = null
       }
 
-      async function adminWrite(body) {
-        try {
-          const response = await authorizedApiRequest('/api/admin/supabase-write', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(body),
-          })
-
-          let responseBody = null
-          try {
-            responseBody = await response.json()
-          } catch {
-            responseBody = null
-          }
-
-          if (!response.ok) {
-            return {
-              error: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Request gagal.',
-            }
-          }
-
-          return { error: null, data: responseBody?.data ?? null }
-        } catch (error) {
-          return {
-            error: error instanceof Error ? error.message : 'Request gagal.',
-          }
-        }
-      }
-
-      function slugify(value) {
-        return value
-          .toLowerCase()
-          .trim()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-')
-      }
-
-      function parseTags(value) {
-        return value
-          .split(',')
-          .map((tag) => tag.trim())
-          .filter(Boolean)
-      }
-
-      function formatTags(tags) {
-        return Array.isArray(tags) ? tags.join(', ') : ''
-      }
-
-      function formatDate(dateValue) {
-        if (!dateValue) return '-'
-        try {
-          return new Intl.DateTimeFormat('id-ID', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          }).format(new Date(dateValue))
-        } catch {
-          return String(dateValue)
-        }
-      }
-
-      function debounce(callback, delayMs = 200) {
-        let timerId = 0
-        return (...args) => {
-          window.clearTimeout(timerId)
-          timerId = window.setTimeout(() => callback(...args), delayMs)
-        }
-      }
-
-      function normalizeAssetName(value) {
-        return value
-          .toLowerCase()
-          .replace(/[^a-z0-9-]+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-|-$/g, '')
-      }
-
-      function getFileExtension(file) {
-        const match = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)
-        return match ? match[1] : 'bin'
-      }
-
-      async function compressImageForUpload(
-        file,
-        outputMime = 'image/webp',
-        maxWidth = 1920,
-        maxHeight = 1920,
-        quality = 0.82,
-      ) {
-        if (!file || !file.type.startsWith('image/')) return file
-
-        const mimeType = (file.type || '').toLowerCase()
-        if (mimeType === 'image/gif') {
-          return file
-        }
-
-        if (typeof createImageBitmap !== 'function') {
-          return file
-        }
-
-        let bitmap
-        try {
-          bitmap = await createImageBitmap(file)
-        } catch {
-          return file
-        }
-
-        try {
-          const widthScale = maxWidth / bitmap.width
-          const heightScale = maxHeight / bitmap.height
-          const scale = Math.min(1, widthScale, heightScale)
-          const targetWidth = Math.max(1, Math.round(bitmap.width * scale))
-          const targetHeight = Math.max(1, Math.round(bitmap.height * scale))
-
-          const canvas = document.createElement('canvas')
-          canvas.width = targetWidth
-          canvas.height = targetHeight
-          const ctx = canvas.getContext('2d')
-          if (!ctx) {
-            return file
-          }
-
-          ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
-
-          const compressedBlob = await new Promise((resolve) => {
-            canvas.toBlob((blob) => resolve(blob), outputMime, quality)
-          })
-
-          if (!compressedBlob) {
-            return file
-          }
-
-          if (compressedBlob.size >= file.size) {
-            return file
-          }
-
-          const baseName = normalizeAssetName(file.name.replace(/\.[^/.]+$/, '')) || 'image'
-          const ext = outputMime === 'image/jpeg' ? 'jpg' : outputMime === 'image/png' ? 'png' : 'webp'
-          return new File([compressedBlob], `${baseName}.${ext}`, {
-            type: outputMime,
-            lastModified: Date.now(),
-          })
-        } catch {
-          return file
-        } finally {
-          if (bitmap && typeof bitmap.close === 'function') {
-            bitmap.close()
-          }
-        }
-      }
-
-      function validateImageFile(file, label) {
-        if (!file) return false
-        if (!file.type.startsWith('image/')) {
-          setStatus(`${label} harus berupa image file.`, 'error')
-          return false
-        }
-        if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type.toLowerCase())) {
-          setStatus(`${label} harus berformat PNG, JPG, WEBP, atau GIF.`, 'error')
-          return false
-        }
-        if (file.size > MAX_ASSET_INPUT_BYTES) {
-          setStatus(`${label} terlalu besar (maks 20MB sebelum kompres).`, 'error')
-          return false
-        }
-        return true
-      }
-
-      async function uploadAssetFile(file, folder) {
-        let uploadCandidate = file
-        for (const plan of IMAGE_COMPRESSION_PLANS) {
-          const compressed = await compressImageForUpload(file, plan.mime, plan.maxWidth, plan.maxHeight, plan.quality)
-          if (compressed.size < uploadCandidate.size) {
-            uploadCandidate = compressed
-          }
-          if (uploadCandidate.size <= MAX_ASSET_UPLOAD_BYTES) break
-        }
-
-        if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
-          throw new Error('Ukuran gambar setelah kompres masih di atas 2MB. Gunakan gambar lebih kecil.')
-        }
-
-        const uploadOne = async (candidateFile) => {
-          const ext = getFileExtension(candidateFile)
-          const baseName = normalizeAssetName(candidateFile.name.replace(/\.[^/.]+$/, '')) || 'asset'
-          const response = await authorizedApiRequest('/api/admin/upload-asset', {
-            method: 'POST',
-            body: (() => {
-              const formData = new FormData()
-              formData.set('file', candidateFile, candidateFile.name)
-              formData.set('folder', folder)
-              formData.set('bucket', SITE_ASSETS_BUCKET)
-              formData.set('fileName', `${baseName}.${ext}`)
-              return formData
-            })(),
-          })
-
-          let responseBody = null
-          try {
-            responseBody = await response.json()
-          } catch {
-            responseBody = null
-          }
-
-          if (!response.ok) {
-            return {
-              error: { message: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Upload gagal.' },
-              filePath: '',
-              publicUrl: '',
-            }
-          }
-
-          return {
-            error: null,
-            filePath: typeof responseBody?.filePath === 'string' ? responseBody.filePath : '',
-            publicUrl: typeof responseBody?.publicUrl === 'string' ? responseBody.publicUrl : '',
-          }
-        }
-
-        let { error: uploadError, filePath, publicUrl } = await uploadOne(uploadCandidate)
-
-        if (uploadError) {
-          const message = (uploadError.message || '').toLowerCase()
-          const canRetryJpeg =
-            uploadCandidate.type === 'image/webp' &&
-            (message.includes('mime') || message.includes('allowed') || message.includes('invalid'))
-
-          if (canRetryJpeg) {
-            const jpegCandidate = await compressImageForUpload(file, 'image/jpeg', 800, 800, 0.54)
-            if (jpegCandidate.size <= MAX_ASSET_UPLOAD_BYTES) {
-              const retryResult = await uploadOne(jpegCandidate)
-              uploadError = retryResult.error
-              filePath = retryResult.filePath
-              publicUrl = retryResult.publicUrl
-            }
-          }
-
-          if (uploadError) {
-            const finalMessage = (uploadError.message || '').toLowerCase()
-            if (finalMessage.includes('bucket not found')) {
-              throw new Error(
-                `Bucket "${SITE_ASSETS_BUCKET}" tidak ditemukan. Buat bucket tersebut di Supabase Storage (public) atau sesuaikan PUBLIC_SUPABASE_ASSETS_BUCKET di .env.`,
-              )
-            }
-            throw new Error(uploadError.message)
-          }
-        }
-
-        if (!publicUrl) {
-          throw new Error(`Upload berhasil tetapi URL publik untuk "${filePath}" tidak tersedia.`)
-        }
-
-        return publicUrl
-      }
-
-      function isObject(value) {
-        return value !== null && typeof value === 'object' && !Array.isArray(value)
-      }
-
-      function createParagraphBlock(text = '') {
+      if (!response.ok) {
         return {
-          id: crypto.randomUUID(),
+          error: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Request gagal.',
+        }
+      }
+
+      return { error: null, data: responseBody?.data ?? null }
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Request gagal.',
+      }
+    }
+  }
+
+  function slugify(value) {
+    return value
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+  }
+
+  function parseTags(value) {
+    return value
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+  }
+
+  function formatTags(tags) {
+    return Array.isArray(tags) ? tags.join(', ') : ''
+  }
+
+  function formatDate(dateValue) {
+    if (!dateValue) return '-'
+    try {
+      return new Intl.DateTimeFormat('id-ID', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(new Date(dateValue))
+    } catch {
+      return String(dateValue)
+    }
+  }
+
+  function debounce(callback, delayMs = 200) {
+    let timerId = 0
+    return (...args) => {
+      window.clearTimeout(timerId)
+      timerId = window.setTimeout(() => callback(...args), delayMs)
+    }
+  }
+
+  function normalizeAssetName(value) {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+  }
+
+  function getFileExtension(file) {
+    const match = file.name.toLowerCase().match(/\.([a-z0-9]+)$/)
+    return match ? match[1] : 'bin'
+  }
+
+  async function compressImageForUpload(
+    file,
+    outputMime = 'image/webp',
+    maxWidth = 1920,
+    maxHeight = 1920,
+    quality = 0.82,
+  ) {
+    if (!file || !file.type.startsWith('image/')) return file
+
+    const mimeType = (file.type || '').toLowerCase()
+    if (mimeType === 'image/gif') {
+      return file
+    }
+
+    if (typeof createImageBitmap !== 'function') {
+      return file
+    }
+
+    let bitmap
+    try {
+      bitmap = await createImageBitmap(file)
+    } catch {
+      return file
+    }
+
+    try {
+      const widthScale = maxWidth / bitmap.width
+      const heightScale = maxHeight / bitmap.height
+      const scale = Math.min(1, widthScale, heightScale)
+      const targetWidth = Math.max(1, Math.round(bitmap.width * scale))
+      const targetHeight = Math.max(1, Math.round(bitmap.height * scale))
+
+      const canvas = document.createElement('canvas')
+      canvas.width = targetWidth
+      canvas.height = targetHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        return file
+      }
+
+      ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
+
+      const compressedBlob = await new Promise((resolve) => {
+        canvas.toBlob((blob) => resolve(blob), outputMime, quality)
+      })
+
+      if (!compressedBlob) {
+        return file
+      }
+
+      if (compressedBlob.size >= file.size) {
+        return file
+      }
+
+      const baseName = normalizeAssetName(file.name.replace(/\.[^/.]+$/, '')) || 'image'
+      const ext = outputMime === 'image/jpeg' ? 'jpg' : outputMime === 'image/png' ? 'png' : 'webp'
+      return new File([compressedBlob], `${baseName}.${ext}`, {
+        type: outputMime,
+        lastModified: Date.now(),
+      })
+    } catch {
+      return file
+    } finally {
+      if (bitmap && typeof bitmap.close === 'function') {
+        bitmap.close()
+      }
+    }
+  }
+
+  function validateImageFile(file, label) {
+    if (!file) return false
+    if (!file.type.startsWith('image/')) {
+      setStatus(`${label} harus berupa image file.`, 'error')
+      return false
+    }
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type.toLowerCase())) {
+      setStatus(`${label} harus berformat PNG, JPG, WEBP, atau GIF.`, 'error')
+      return false
+    }
+    if (file.size > MAX_ASSET_INPUT_BYTES) {
+      setStatus(`${label} terlalu besar (maks 20MB sebelum kompres).`, 'error')
+      return false
+    }
+    return true
+  }
+
+  async function uploadAssetFile(file, folder) {
+    let uploadCandidate = file
+    for (const plan of IMAGE_COMPRESSION_PLANS) {
+      const compressed = await compressImageForUpload(file, plan.mime, plan.maxWidth, plan.maxHeight, plan.quality)
+      if (compressed.size < uploadCandidate.size) {
+        uploadCandidate = compressed
+      }
+      if (uploadCandidate.size <= MAX_ASSET_UPLOAD_BYTES) break
+    }
+
+    if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
+      throw new Error('Ukuran gambar setelah kompres masih di atas 2MB. Gunakan gambar lebih kecil.')
+    }
+
+    const uploadOne = async (candidateFile) => {
+      const ext = getFileExtension(candidateFile)
+      const baseName = normalizeAssetName(candidateFile.name.replace(/\.[^/.]+$/, '')) || 'asset'
+      const response = await authorizedApiRequest('/api/admin/upload-asset', {
+        method: 'POST',
+        body: (() => {
+          const formData = new FormData()
+          formData.set('file', candidateFile, candidateFile.name)
+          formData.set('folder', folder)
+          formData.set('bucket', SITE_ASSETS_BUCKET)
+          formData.set('fileName', `${baseName}.${ext}`)
+          return formData
+        })(),
+      })
+
+      let responseBody = null
+      try {
+        responseBody = await response.json()
+      } catch {
+        responseBody = null
+      }
+
+      if (!response.ok) {
+        return {
+          error: {
+            message: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Upload gagal.',
+          },
+          filePath: '',
+          publicUrl: '',
+        }
+      }
+
+      return {
+        error: null,
+        filePath: typeof responseBody?.filePath === 'string' ? responseBody.filePath : '',
+        publicUrl: typeof responseBody?.publicUrl === 'string' ? responseBody.publicUrl : '',
+      }
+    }
+
+    let { error: uploadError, filePath, publicUrl } = await uploadOne(uploadCandidate)
+
+    if (uploadError) {
+      const message = (uploadError.message || '').toLowerCase()
+      const canRetryJpeg =
+        uploadCandidate.type === 'image/webp' &&
+        (message.includes('mime') || message.includes('allowed') || message.includes('invalid'))
+
+      if (canRetryJpeg) {
+        const jpegCandidate = await compressImageForUpload(file, 'image/jpeg', 800, 800, 0.54)
+        if (jpegCandidate.size <= MAX_ASSET_UPLOAD_BYTES) {
+          const retryResult = await uploadOne(jpegCandidate)
+          uploadError = retryResult.error
+          filePath = retryResult.filePath
+          publicUrl = retryResult.publicUrl
+        }
+      }
+
+      if (uploadError) {
+        const finalMessage = (uploadError.message || '').toLowerCase()
+        if (finalMessage.includes('bucket not found')) {
+          throw new Error(
+            `Bucket "${SITE_ASSETS_BUCKET}" tidak ditemukan. Buat bucket tersebut di Supabase Storage (public) atau sesuaikan PUBLIC_SUPABASE_ASSETS_BUCKET di .env.`,
+          )
+        }
+        throw new Error(uploadError.message)
+      }
+    }
+
+    if (!publicUrl) {
+      throw new Error(`Upload berhasil tetapi URL publik untuk "${filePath}" tidak tersedia.`)
+    }
+
+    return publicUrl
+  }
+
+  function isObject(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+  }
+
+  function createParagraphBlock(text = '') {
+    return {
+      id: crypto.randomUUID(),
+      type: 'paragraph',
+      text,
+    }
+  }
+
+  function createImageBlock() {
+    return {
+      id: crypto.randomUUID(),
+      type: 'image',
+      url: '',
+      alt: '',
+      caption: '',
+      pendingFile: null,
+    }
+  }
+
+  function createTableBlock() {
+    return {
+      id: crypto.randomUUID(),
+      type: 'table',
+      caption: '',
+      headers: [],
+      rows: [],
+    }
+  }
+
+  function parsePipeRow(line) {
+    return line
+      .split('|')
+      .map((cell) => cell.trim())
+      .filter(Boolean)
+  }
+
+  async function loadXlsxModule() {
+    if (!xlsxModulePromise) {
+      xlsxModulePromise = import('https://esm.sh/xlsx@0.18.5?bundle')
+    }
+    return xlsxModulePromise
+  }
+
+  function normalizeSheetRows(rawRows) {
+    if (!Array.isArray(rawRows)) return []
+
+    return rawRows
+      .map((row) =>
+        Array.isArray(row) ? row.map((cell) => (cell === null || cell === undefined ? '' : String(cell).trim())) : [],
+      )
+      .filter((row) => row.some((cell) => cell.length > 0))
+  }
+
+  function serializeRowsToPipeText(rows) {
+    if (!Array.isArray(rows)) return ''
+    return rows
+      .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? '')).join(' | ') : ''))
+      .filter((line) => line.trim().length > 0)
+      .join('\n')
+  }
+
+  async function importTableFromSpreadsheet(file, block) {
+    if (!file) {
+      throw new Error('Pilih file tabel terlebih dahulu.')
+    }
+
+    if (file.size > MAX_TABLE_IMPORT_BYTES) {
+      throw new Error('Ukuran file tabel melebihi 10MB.')
+    }
+
+    const lowerName = file.name.toLowerCase()
+    const isSupported = lowerName.endsWith('.csv') || lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')
+    if (!isSupported) {
+      throw new Error('Format file tidak didukung. Gunakan CSV, XLS, atau XLSX.')
+    }
+
+    const xlsx = await loadXlsxModule()
+    const fileBuffer = await file.arrayBuffer()
+    const workbook = xlsx.read(fileBuffer, { type: 'array' })
+    const firstSheetName = Array.isArray(workbook.SheetNames) ? workbook.SheetNames[0] : null
+
+    if (!firstSheetName) {
+      throw new Error('Sheet tidak ditemukan di file.')
+    }
+
+    const worksheet = workbook.Sheets[firstSheetName]
+    const rawRows = xlsx.utils.sheet_to_json(worksheet, {
+      header: 1,
+      raw: false,
+      defval: '',
+      blankrows: false,
+    })
+
+    const rows = normalizeSheetRows(rawRows)
+    if (rows.length === 0) {
+      throw new Error('File tabel kosong.')
+    }
+
+    const firstRow = rows[0]
+    const bodyRows = rows.slice(1)
+    const maxColumns = Math.max(firstRow.length, ...bodyRows.map((row) => row.length))
+    const headers = Array.from({ length: maxColumns }, (_, index) => {
+      const fromFile = String(firstRow[index] ?? '').trim()
+      return fromFile || `Kolom ${index + 1}`
+    })
+
+    const normalizedBodyRows = bodyRows
+      .map((row) => {
+        const normalizedRow = Array.from({ length: maxColumns }, (_, index) => String(row[index] ?? '').trim())
+        return normalizedRow.some((cell) => cell.length > 0) ? normalizedRow : null
+      })
+      .filter(Boolean)
+
+    block.headers = headers
+    block.rows = normalizedBodyRows
+  }
+
+  function normalizeBlocks(rawBlocks, fallbackBody = '') {
+    const normalized = []
+    const source = Array.isArray(rawBlocks) ? rawBlocks : []
+
+    for (let index = 0; index < source.length; index += 1) {
+      const entry = source[index]
+      if (!isObject(entry)) continue
+
+      const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id : crypto.randomUUID()
+      const type = typeof entry.type === 'string' ? entry.type : ''
+
+      if (type === 'paragraph') {
+        const text = typeof entry.text === 'string' ? entry.text.trim() : ''
+        if (!text) continue
+        normalized.push({
+          id,
           type: 'paragraph',
           text,
-        }
+        })
+        continue
       }
 
-      function createImageBlock() {
-        return {
-          id: crypto.randomUUID(),
+      if (type === 'image') {
+        const url = typeof entry.url === 'string' ? entry.url.trim() : ''
+        if (!url) continue
+        normalized.push({
+          id,
           type: 'image',
-          url: '',
-          alt: '',
-          caption: '',
+          url,
+          alt: typeof entry.alt === 'string' ? entry.alt.trim() : '',
+          caption: typeof entry.caption === 'string' ? entry.caption.trim() : '',
           pendingFile: null,
-        }
+        })
+        continue
       }
 
-      function createTableBlock() {
-        return {
-          id: crypto.randomUUID(),
+      if (type === 'table') {
+        const headers = Array.isArray(entry.headers)
+          ? entry.headers.map((cell) => String(cell).trim()).filter(Boolean)
+          : []
+        const rows = Array.isArray(entry.rows)
+          ? entry.rows
+              .map((row) =>
+                Array.isArray(row) ? row.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0) : [],
+              )
+              .filter((row) => row.length > 0)
+          : []
+
+        if (headers.length === 0 && rows.length === 0) continue
+
+        normalized.push({
+          id,
           type: 'table',
-          caption: '',
-          headers: [],
-          rows: [],
-        }
-      }
-
-      function parsePipeRow(line) {
-        return line
-          .split('|')
-          .map((cell) => cell.trim())
-          .filter(Boolean)
-      }
-
-      async function loadXlsxModule() {
-        if (!xlsxModulePromise) {
-          xlsxModulePromise = import('https://esm.sh/xlsx@0.18.5?bundle')
-        }
-        return xlsxModulePromise
-      }
-
-      function normalizeSheetRows(rawRows) {
-        if (!Array.isArray(rawRows)) return []
-
-        return rawRows
-          .map((row) =>
-            Array.isArray(row)
-              ? row.map((cell) => (cell === null || cell === undefined ? '' : String(cell).trim()))
-              : [],
-          )
-          .filter((row) => row.some((cell) => cell.length > 0))
-      }
-
-      function serializeRowsToPipeText(rows) {
-        if (!Array.isArray(rows)) return ''
-        return rows
-          .map((row) => (Array.isArray(row) ? row.map((cell) => String(cell ?? '')).join(' | ') : ''))
-          .filter((line) => line.trim().length > 0)
-          .join('\n')
-      }
-
-      async function importTableFromSpreadsheet(file, block) {
-        if (!file) {
-          throw new Error('Pilih file tabel terlebih dahulu.')
-        }
-
-        if (file.size > MAX_TABLE_IMPORT_BYTES) {
-          throw new Error('Ukuran file tabel melebihi 10MB.')
-        }
-
-        const lowerName = file.name.toLowerCase()
-        const isSupported = lowerName.endsWith('.csv') || lowerName.endsWith('.xls') || lowerName.endsWith('.xlsx')
-        if (!isSupported) {
-          throw new Error('Format file tidak didukung. Gunakan CSV, XLS, atau XLSX.')
-        }
-
-        const xlsx = await loadXlsxModule()
-        const fileBuffer = await file.arrayBuffer()
-        const workbook = xlsx.read(fileBuffer, { type: 'array' })
-        const firstSheetName = Array.isArray(workbook.SheetNames) ? workbook.SheetNames[0] : null
-
-        if (!firstSheetName) {
-          throw new Error('Sheet tidak ditemukan di file.')
-        }
-
-        const worksheet = workbook.Sheets[firstSheetName]
-        const rawRows = xlsx.utils.sheet_to_json(worksheet, {
-          header: 1,
-          raw: false,
-          defval: '',
-          blankrows: false,
+          caption: typeof entry.caption === 'string' ? entry.caption.trim() : '',
+          headers,
+          rows,
         })
+      }
+    }
 
-        const rows = normalizeSheetRows(rawRows)
-        if (rows.length === 0) {
-          throw new Error('File tabel kosong.')
-        }
-
-        const firstRow = rows[0]
-        const bodyRows = rows.slice(1)
-        const maxColumns = Math.max(firstRow.length, ...bodyRows.map((row) => row.length))
-        const headers = Array.from({ length: maxColumns }, (_, index) => {
-          const fromFile = String(firstRow[index] ?? '').trim()
-          return fromFile || `Kolom ${index + 1}`
+    if (normalized.length === 0 && typeof fallbackBody === 'string' && fallbackBody.trim()) {
+      fallbackBody
+        .split(/\n{2,}/)
+        .map((paragraph) => paragraph.trim())
+        .filter(Boolean)
+        .forEach((paragraph) => {
+          normalized.push(createParagraphBlock(paragraph))
         })
+    }
 
-        const normalizedBodyRows = bodyRows
-          .map((row) => {
-            const normalizedRow = Array.from({ length: maxColumns }, (_, index) => String(row[index] ?? '').trim())
-            return normalizedRow.some((cell) => cell.length > 0) ? normalizedRow : null
-          })
-          .filter(Boolean)
+    return normalized
+  }
 
-        block.headers = headers
-        block.rows = normalizedBodyRows
-      }
+  function sanitizeBlocksForSave(blocks) {
+    const cleaned = []
 
-      function normalizeBlocks(rawBlocks, fallbackBody = '') {
-        const normalized = []
-        const source = Array.isArray(rawBlocks) ? rawBlocks : []
+    for (const block of blocks) {
+      if (!isObject(block) || typeof block.type !== 'string') continue
 
-        for (let index = 0; index < source.length; index += 1) {
-          const entry = source[index]
-          if (!isObject(entry)) continue
-
-          const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id : crypto.randomUUID()
-          const type = typeof entry.type === 'string' ? entry.type : ''
-
-          if (type === 'paragraph') {
-            const text = typeof entry.text === 'string' ? entry.text.trim() : ''
-            if (!text) continue
-            normalized.push({
-              id,
-              type: 'paragraph',
-              text,
-            })
-            continue
-          }
-
-          if (type === 'image') {
-            const url = typeof entry.url === 'string' ? entry.url.trim() : ''
-            if (!url) continue
-            normalized.push({
-              id,
-              type: 'image',
-              url,
-              alt: typeof entry.alt === 'string' ? entry.alt.trim() : '',
-              caption: typeof entry.caption === 'string' ? entry.caption.trim() : '',
-              pendingFile: null,
-            })
-            continue
-          }
-
-          if (type === 'table') {
-            const headers = Array.isArray(entry.headers)
-              ? entry.headers.map((cell) => String(cell).trim()).filter(Boolean)
-              : []
-            const rows = Array.isArray(entry.rows)
-              ? entry.rows
-                  .map((row) =>
-                    Array.isArray(row) ? row.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0) : [],
-                  )
-                  .filter((row) => row.length > 0)
-              : []
-
-            if (headers.length === 0 && rows.length === 0) continue
-
-            normalized.push({
-              id,
-              type: 'table',
-              caption: typeof entry.caption === 'string' ? entry.caption.trim() : '',
-              headers,
-              rows,
-            })
-          }
-        }
-
-        if (normalized.length === 0 && typeof fallbackBody === 'string' && fallbackBody.trim()) {
-          fallbackBody
-            .split(/\n{2,}/)
-            .map((paragraph) => paragraph.trim())
-            .filter(Boolean)
-            .forEach((paragraph) => {
-              normalized.push(createParagraphBlock(paragraph))
-            })
-        }
-
-        return normalized
-      }
-
-      function sanitizeBlocksForSave(blocks) {
-        const cleaned = []
-
-        for (const block of blocks) {
-          if (!isObject(block) || typeof block.type !== 'string') continue
-
-          if (block.type === 'paragraph') {
-            const text = typeof block.text === 'string' ? block.text.trim() : ''
-            if (!text) continue
-            cleaned.push({
-              id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
-              type: 'paragraph',
-              text,
-            })
-            continue
-          }
-
-          if (block.type === 'image') {
-            const url = typeof block.url === 'string' ? block.url.trim() : ''
-            if (!url) continue
-            cleaned.push({
-              id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
-              type: 'image',
-              url,
-              alt: typeof block.alt === 'string' ? block.alt.trim() : '',
-              caption: typeof block.caption === 'string' ? block.caption.trim() : '',
-            })
-            continue
-          }
-
-          if (block.type === 'table') {
-            const headers = Array.isArray(block.headers)
-              ? block.headers.map((cell) => String(cell).trim()).filter(Boolean)
-              : []
-            const rows = Array.isArray(block.rows)
-              ? block.rows
-                  .map((row) =>
-                    Array.isArray(row) ? row.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0) : [],
-                  )
-                  .filter((row) => row.length > 0)
-              : []
-
-            if (headers.length === 0 && rows.length === 0) continue
-
-            cleaned.push({
-              id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
-              type: 'table',
-              caption: typeof block.caption === 'string' ? block.caption.trim() : '',
-              headers,
-              rows,
-            })
-          }
-        }
-
-        return cleaned
-      }
-
-      function deriveLegacyBody(blocks) {
-        return blocks
-          .filter((block) => block.type === 'paragraph')
-          .map((block) => block.text.trim())
-          .filter(Boolean)
-          .join('\n\n')
-      }
-
-      function updateSlugPreview() {
-        const slug = fields.slug.value.trim() || slugify(fields.title.value) || 'nama-post'
-        slugPreview.textContent = `/blog/${slug}`
-      }
-
-      function updateCounters() {
-        const descriptionLength = fields.description.value.trim().length
-        descriptionCount.textContent = `${descriptionLength} chars`
-        blockCount.textContent = `${contentBlocks.length} blocks`
-      }
-
-      function clearSelectedAssetFiles() {
-        coverImageFileInput.value = ''
-      }
-
-      function renderContentBlocks() {
-        contentBlockList.innerHTML = ''
-
-        if (!contentBlocks.length) {
-          const emptyItem = document.createElement('li')
-          emptyItem.className = 'empty-state muted'
-          emptyItem.textContent = 'Belum ada blok konten. Tambah paragraf, gambar, atau tabel.'
-          contentBlockList.appendChild(emptyItem)
-          updateCounters()
-          return
-        }
-
-        contentBlocks.forEach((block, index) => {
-          const item = document.createElement('li')
-          item.className = 'block-item'
-
-          const head = document.createElement('div')
-          head.className = 'block-head'
-
-          const title = document.createElement('p')
-          title.className = 'block-title'
-          title.textContent = `Block ${index + 1}: ${block.type}`
-
-          const actions = document.createElement('div')
-          actions.className = 'block-actions'
-
-          const moveUpButton = document.createElement('button')
-          moveUpButton.type = 'button'
-          moveUpButton.className = 'button small'
-          moveUpButton.textContent = 'Up'
-          moveUpButton.disabled = index === 0
-          moveUpButton.addEventListener('click', () => {
-            if (index === 0) return
-            const prev = contentBlocks[index - 1]
-            contentBlocks[index - 1] = contentBlocks[index]
-            contentBlocks[index] = prev
-            renderContentBlocks()
-          })
-
-          const moveDownButton = document.createElement('button')
-          moveDownButton.type = 'button'
-          moveDownButton.className = 'button small'
-          moveDownButton.textContent = 'Down'
-          moveDownButton.disabled = index === contentBlocks.length - 1
-          moveDownButton.addEventListener('click', () => {
-            if (index === contentBlocks.length - 1) return
-            const next = contentBlocks[index + 1]
-            contentBlocks[index + 1] = contentBlocks[index]
-            contentBlocks[index] = next
-            renderContentBlocks()
-          })
-
-          const deleteButton = document.createElement('button')
-          deleteButton.type = 'button'
-          deleteButton.className = 'button small'
-          deleteButton.textContent = 'Delete'
-          deleteButton.addEventListener('click', () => {
-            contentBlocks = contentBlocks.filter((entry) => entry.id !== block.id)
-            renderContentBlocks()
-          })
-
-          actions.append(moveUpButton, moveDownButton, deleteButton)
-          head.append(title, actions)
-          item.append(head)
-
-          const blockBody = document.createElement('div')
-          blockBody.className = 'block-body'
-
-          if (block.type === 'paragraph') {
-            const paragraphInput = document.createElement('textarea')
-            paragraphInput.placeholder = 'Tulis paragraf artikel...'
-            paragraphInput.value = block.text || ''
-            paragraphInput.addEventListener('input', () => {
-              block.text = paragraphInput.value
-            })
-            blockBody.append(paragraphInput)
-          }
-
-          if (block.type === 'image') {
-            const imageUrlInput = document.createElement('input')
-            imageUrlInput.type = 'url'
-            imageUrlInput.placeholder = 'https://...'
-            imageUrlInput.value = block.url || ''
-            imageUrlInput.addEventListener('input', () => {
-              block.url = imageUrlInput.value.trim()
-            })
-
-            const imageAltInput = document.createElement('input')
-            imageAltInput.type = 'text'
-            imageAltInput.placeholder = 'Alt text gambar'
-            imageAltInput.value = block.alt || ''
-            imageAltInput.addEventListener('input', () => {
-              block.alt = imageAltInput.value
-            })
-
-            const imageCaptionInput = document.createElement('input')
-            imageCaptionInput.type = 'text'
-            imageCaptionInput.placeholder = 'Caption (opsional)'
-            imageCaptionInput.value = block.caption || ''
-            imageCaptionInput.addEventListener('input', () => {
-              block.caption = imageCaptionInput.value
-            })
-
-            const uploadWrap = document.createElement('div')
-            uploadWrap.className = 'form-actions'
-
-            const imageFileInput = document.createElement('input')
-            imageFileInput.type = 'file'
-            imageFileInput.accept = '.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif'
-
-            const selectedFileMeta = document.createElement('p')
-            selectedFileMeta.className = 'helper'
-            selectedFileMeta.style.margin = '0'
-            const renderSelectedFileMeta = () => {
-              if (block.pendingFile) {
-                selectedFileMeta.textContent = `File terpilih: ${block.pendingFile.name}`
-              } else {
-                selectedFileMeta.textContent = 'Belum ada file dipilih.'
-              }
-            }
-
-            imageFileInput.addEventListener('change', () => {
-              block.pendingFile = imageFileInput.files && imageFileInput.files[0] ? imageFileInput.files[0] : null
-              renderSelectedFileMeta()
-            })
-
-            const uploadImageButton = document.createElement('button')
-            uploadImageButton.type = 'button'
-            uploadImageButton.className = 'button small'
-            uploadImageButton.textContent = 'Upload image'
-            uploadImageButton.addEventListener('click', async () => {
-              const file = (imageFileInput.files && imageFileInput.files[0]) || block.pendingFile
-              if (!file) {
-                setStatus('Pilih file image terlebih dahulu.', 'error')
-                return
-              }
-              if (!validateImageFile(file, 'Block image')) return
-
-              uploadImageButton.disabled = true
-              setStatus('Uploading block image...', 'info')
-              try {
-                const publicUrl = await uploadAssetFile(file, 'blog-content')
-                block.url = publicUrl
-                block.pendingFile = null
-                imageUrlInput.value = publicUrl
-                imageFileInput.value = ''
-                renderSelectedFileMeta()
-                if (!fields.coverImageUrl.value.trim()) {
-                  fields.coverImageUrl.value = publicUrl
-                }
-                setStatus('Block image uploaded.', 'success')
-              } catch (error) {
-                setStatus(error instanceof Error ? error.message : 'Upload gagal.', 'error')
-              } finally {
-                uploadImageButton.disabled = false
-              }
-            })
-
-            renderSelectedFileMeta()
-            uploadWrap.append(imageFileInput, uploadImageButton)
-            blockBody.append(imageUrlInput, imageAltInput, imageCaptionInput, uploadWrap)
-            blockBody.append(selectedFileMeta)
-          }
-
-          if (block.type === 'table') {
-            const captionInput = document.createElement('input')
-            captionInput.type = 'text'
-            captionInput.placeholder = 'Caption tabel (opsional)'
-            captionInput.value = block.caption || ''
-            captionInput.addEventListener('input', () => {
-              block.caption = captionInput.value
-            })
-
-            const headersInput = document.createElement('input')
-            headersInput.type = 'text'
-            headersInput.placeholder = 'Header 1 | Header 2 | Header 3'
-            headersInput.value = Array.isArray(block.headers) ? block.headers.join(' | ') : ''
-            headersInput.addEventListener('input', () => {
-              block.headers = parsePipeRow(headersInput.value)
-            })
-
-            const rowsInput = document.createElement('textarea')
-            rowsInput.placeholder = 'Baris 1 kolom 1 | Baris 1 kolom 2\nBaris 2 kolom 1 | Baris 2 kolom 2'
-            rowsInput.value = serializeRowsToPipeText(block.rows)
-            rowsInput.addEventListener('input', () => {
-              block.rows = rowsInput.value
-                .split('\n')
-                .map((line) => parsePipeRow(line))
-                .filter((row) => row.length > 0)
-            })
-
-            const importWrap = document.createElement('div')
-            importWrap.className = 'form-actions'
-
-            const tableFileInput = document.createElement('input')
-            tableFileInput.type = 'file'
-            tableFileInput.accept = '.csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
-            const importButton = document.createElement('button')
-            importButton.type = 'button'
-            importButton.className = 'button small'
-            importButton.textContent = 'Import CSV/XLS'
-            importButton.addEventListener('click', async () => {
-              const file = tableFileInput.files && tableFileInput.files[0]
-              if (!file) {
-                setStatus('Pilih file CSV/XLS terlebih dahulu.', 'error')
-                return
-              }
-
-              importButton.disabled = true
-              setStatus('Mengimpor tabel dari file...', 'info')
-              try {
-                await importTableFromSpreadsheet(file, block)
-                headersInput.value = Array.isArray(block.headers) ? block.headers.join(' | ') : ''
-                rowsInput.value = serializeRowsToPipeText(block.rows)
-                setStatus('Tabel berhasil diimpor dari file.', 'success')
-              } catch (error) {
-                setStatus(error instanceof Error ? error.message : 'Import tabel gagal.', 'error')
-              } finally {
-                importButton.disabled = false
-              }
-            })
-
-            importWrap.append(tableFileInput, importButton)
-
-            blockBody.append(captionInput, headersInput, rowsInput, importWrap)
-          }
-
-          item.append(blockBody)
-          contentBlockList.append(item)
+      if (block.type === 'paragraph') {
+        const text = typeof block.text === 'string' ? block.text.trim() : ''
+        if (!text) continue
+        cleaned.push({
+          id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
+          type: 'paragraph',
+          text,
         })
-
-        updateCounters()
+        continue
       }
 
-      function addBlock(type) {
-        if (type === 'paragraph') contentBlocks.push(createParagraphBlock())
-        if (type === 'image') contentBlocks.push(createImageBlock())
-        if (type === 'table') contentBlocks.push(createTableBlock())
+      if (block.type === 'image') {
+        const url = typeof block.url === 'string' ? block.url.trim() : ''
+        if (!url) continue
+        cleaned.push({
+          id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
+          type: 'image',
+          url,
+          alt: typeof block.alt === 'string' ? block.alt.trim() : '',
+          caption: typeof block.caption === 'string' ? block.caption.trim() : '',
+        })
+        continue
+      }
+
+      if (block.type === 'table') {
+        const headers = Array.isArray(block.headers)
+          ? block.headers.map((cell) => String(cell).trim()).filter(Boolean)
+          : []
+        const rows = Array.isArray(block.rows)
+          ? block.rows
+              .map((row) =>
+                Array.isArray(row) ? row.map((cell) => String(cell).trim()).filter((cell) => cell.length > 0) : [],
+              )
+              .filter((row) => row.length > 0)
+          : []
+
+        if (headers.length === 0 && rows.length === 0) continue
+
+        cleaned.push({
+          id: typeof block.id === 'string' && block.id ? block.id : crypto.randomUUID(),
+          type: 'table',
+          caption: typeof block.caption === 'string' ? block.caption.trim() : '',
+          headers,
+          rows,
+        })
+      }
+    }
+
+    return cleaned
+  }
+
+  function deriveLegacyBody(blocks) {
+    return blocks
+      .filter((block) => block.type === 'paragraph')
+      .map((block) => block.text.trim())
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  function updateSlugPreview() {
+    const slug = fields.slug.value.trim() || slugify(fields.title.value) || 'nama-post'
+    slugPreview.textContent = `/blog/${slug}`
+  }
+
+  function updateCounters() {
+    const descriptionLength = fields.description.value.trim().length
+    descriptionCount.textContent = `${descriptionLength} chars`
+    blockCount.textContent = `${contentBlocks.length} blocks`
+  }
+
+  function clearSelectedAssetFiles() {
+    coverImageFileInput.value = ''
+  }
+
+  function renderContentBlocks() {
+    contentBlockList.innerHTML = ''
+
+    if (!contentBlocks.length) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state muted'
+      emptyItem.textContent = 'Belum ada blok konten. Tambah paragraf, gambar, atau tabel.'
+      contentBlockList.appendChild(emptyItem)
+      updateCounters()
+      return
+    }
+
+    contentBlocks.forEach((block, index) => {
+      const item = document.createElement('li')
+      item.className = 'block-item'
+
+      const head = document.createElement('div')
+      head.className = 'block-head'
+
+      const title = document.createElement('p')
+      title.className = 'block-title'
+      title.textContent = `Block ${index + 1}: ${block.type}`
+
+      const actions = document.createElement('div')
+      actions.className = 'block-actions'
+
+      const moveUpButton = document.createElement('button')
+      moveUpButton.type = 'button'
+      moveUpButton.className = 'button small'
+      moveUpButton.textContent = 'Up'
+      moveUpButton.disabled = index === 0
+      moveUpButton.addEventListener('click', () => {
+        if (index === 0) return
+        const prev = contentBlocks[index - 1]
+        contentBlocks[index - 1] = contentBlocks[index]
+        contentBlocks[index] = prev
         renderContentBlocks()
-      }
+      })
 
-      function resetForm() {
-        fields.id.value = ''
-        fields.title.value = ''
-        fields.slug.value = ''
-        fields.author.value = ''
-        fields.tags.value = ''
-        fields.description.value = ''
-        fields.coverImageUrl.value = ''
-        contentBlocks = []
-        clearSelectedAssetFiles()
-        slugDirty = false
-        saveButton.textContent = 'Save post'
-        updateSlugPreview()
+      const moveDownButton = document.createElement('button')
+      moveDownButton.type = 'button'
+      moveDownButton.className = 'button small'
+      moveDownButton.textContent = 'Down'
+      moveDownButton.disabled = index === contentBlocks.length - 1
+      moveDownButton.addEventListener('click', () => {
+        if (index === contentBlocks.length - 1) return
+        const next = contentBlocks[index + 1]
+        contentBlocks[index + 1] = contentBlocks[index]
+        contentBlocks[index] = next
         renderContentBlocks()
-      }
+      })
 
-      function fillForm(project) {
-        fields.id.value = project.id
-        fields.title.value = project.title || ''
-        fields.slug.value = project.slug || ''
-        fields.author.value = project.author || ''
-        fields.tags.value = formatTags(project.tags)
-        fields.description.value = project.description || ''
-        fields.coverImageUrl.value = project.cover_image_url || ''
-        contentBlocks = normalizeBlocks(project.content_blocks, project.body || '')
-        clearSelectedAssetFiles()
-        slugDirty = true
-        saveButton.textContent = 'Update post'
-        updateSlugPreview()
+      const deleteButton = document.createElement('button')
+      deleteButton.type = 'button'
+      deleteButton.className = 'button small'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', () => {
+        contentBlocks = contentBlocks.filter((entry) => entry.id !== block.id)
         renderContentBlocks()
-      }
+      })
 
-      function computeFilteredPosts() {
-        const term = searchInput.value.trim().toLowerCase()
-        if (!term) return allPosts
+      actions.append(moveUpButton, moveDownButton, deleteButton)
+      head.append(title, actions)
+      item.append(head)
 
-        return allPosts.filter((project) => {
-          const bag = [
-            project.title,
-            project.slug,
-            project.author,
-            project.description,
-            formatTags(project.tags),
-            project.cover_image_url,
-          ]
-            .join(' ')
-            .toLowerCase()
+      const blockBody = document.createElement('div')
+      blockBody.className = 'block-body'
 
-          return bag.includes(term)
+      if (block.type === 'paragraph') {
+        const paragraphInput = document.createElement('textarea')
+        paragraphInput.placeholder = 'Tulis paragraf artikel...'
+        paragraphInput.value = block.text || ''
+        paragraphInput.addEventListener('input', () => {
+          block.text = paragraphInput.value
         })
+        blockBody.append(paragraphInput)
       }
 
-      function updateMetrics(filteredPosts) {
-        const authorSet = new Set(filteredPosts.map((project) => project.author).filter(Boolean))
-        const tagSet = new Set(
-          filteredPosts.flatMap((project) =>
-            Array.isArray(project.tags) ? project.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
-          ),
-        )
+      if (block.type === 'image') {
+        const imageUrlInput = document.createElement('input')
+        imageUrlInput.type = 'url'
+        imageUrlInput.placeholder = 'https://...'
+        imageUrlInput.value = block.url || ''
+        imageUrlInput.addEventListener('input', () => {
+          block.url = imageUrlInput.value.trim()
+        })
 
-        metricTotal.textContent = String(allPosts.length)
-        metricVisible.textContent = String(filteredPosts.length)
-        metricAuthors.textContent = String(authorSet.size)
-        metricTags.textContent = String(tagSet.size)
-      }
+        const imageAltInput = document.createElement('input')
+        imageAltInput.type = 'text'
+        imageAltInput.placeholder = 'Alt text gambar'
+        imageAltInput.value = block.alt || ''
+        imageAltInput.addEventListener('input', () => {
+          block.alt = imageAltInput.value
+        })
 
-      function renderProjects(projects) {
-        projectList.innerHTML = ''
+        const imageCaptionInput = document.createElement('input')
+        imageCaptionInput.type = 'text'
+        imageCaptionInput.placeholder = 'Caption (opsional)'
+        imageCaptionInput.value = block.caption || ''
+        imageCaptionInput.addEventListener('input', () => {
+          block.caption = imageCaptionInput.value
+        })
 
-        if (!projects.length) {
-          const emptyItem = document.createElement('li')
-          emptyItem.className = 'empty-state muted'
-          emptyItem.textContent = searchInput.value.trim()
-            ? `Tidak ada post yang cocok dengan pencarian "${searchInput.value.trim()}".`
-            : 'Belum ada post. Mulai dengan membuat post pertama.'
-          projectList.appendChild(emptyItem)
-          return
+        const uploadWrap = document.createElement('div')
+        uploadWrap.className = 'form-actions'
+
+        const imageFileInput = document.createElement('input')
+        imageFileInput.type = 'file'
+        imageFileInput.accept = '.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif'
+
+        const selectedFileMeta = document.createElement('p')
+        selectedFileMeta.className = 'helper'
+        selectedFileMeta.style.margin = '0'
+        const renderSelectedFileMeta = () => {
+          if (block.pendingFile) {
+            selectedFileMeta.textContent = `File terpilih: ${block.pendingFile.name}`
+          } else {
+            selectedFileMeta.textContent = 'Belum ada file dipilih.'
+          }
         }
 
-        for (const project of projects) {
-          const li = document.createElement('li')
-          li.className = 'project-item'
+        imageFileInput.addEventListener('change', () => {
+          block.pendingFile = imageFileInput.files && imageFileInput.files[0] ? imageFileInput.files[0] : null
+          renderSelectedFileMeta()
+        })
 
-          const title = document.createElement('h3')
-          title.textContent = project.title || '(Untitled)'
-
-          const meta = document.createElement('p')
-          meta.className = 'project-meta'
-          meta.textContent = `slug: ${project.slug} | author: ${project.author || '-'} | updated: ${formatDate(project.updated_at)}`
-
-          const desc = document.createElement('p')
-          desc.className = 'project-description'
-          desc.textContent = project.description || ''
-
-          const tags = document.createElement('p')
-          tags.className = 'project-meta'
-          tags.textContent = `tags: ${formatTags(project.tags) || '-'}`
-
-          const blockMeta = document.createElement('p')
-          blockMeta.className = 'project-meta'
-          const blockLength = Array.isArray(project.content_blocks) ? project.content_blocks.length : 0
-          blockMeta.textContent = `blocks: ${blockLength} | cover: ${project.cover_image_url ? 'yes' : 'no'}`
-
-          const actions = document.createElement('div')
-          actions.className = 'project-actions'
-
-          const editButton = document.createElement('button')
-          editButton.type = 'button'
-          editButton.className = 'button small'
-          editButton.textContent = 'Edit'
-          editButton.addEventListener('click', () => {
-            fillForm(project)
-            fields.title.focus()
-            setStatus(`Editing post "${project.title}"`, 'info')
-          })
-
-          const deleteButton = document.createElement('button')
-          deleteButton.type = 'button'
-          deleteButton.className = 'button small'
-          deleteButton.textContent = 'Delete'
-          deleteButton.addEventListener('click', async () => {
-            const ok = window.confirm(`Delete post "${project.title}"?`)
-            if (!ok) return
-
-            const { error } = await adminWrite({
-              table: 'blog_posts',
-              action: 'delete',
-              filters: [{ column: 'id', operator: 'eq', value: project.id }],
-            })
-            if (error) {
-              setStatus(error, 'error')
-              return
-            }
-
-            if (fields.id.value === project.id) {
-              resetForm()
-            }
-
-            setStatus('Post deleted.', 'success')
-            await loadPosts()
-          })
-
-          actions.append(editButton, deleteButton)
-          li.append(title, meta, desc, tags, blockMeta, actions)
-          projectList.appendChild(li)
-        }
-      }
-
-      async function loadPosts() {
-        let data = null
-        let error = null
-
-        const latestQuery = await supabase
-          .from('blog_posts')
-          .select('id, slug, title, author, description, tags, body, cover_image_url, content_blocks, created_at, updated_at')
-          .order('updated_at', { ascending: false })
-          .limit(LIST_FETCH_LIMIT)
-
-        data = latestQuery.data
-        error = latestQuery.error
-
-        if (error) {
-          const legacyQuery = await supabase
-            .from('blog_posts')
-            .select('id, slug, title, author, description, tags, body, created_at, updated_at')
-            .order('updated_at', { ascending: false })
-            .limit(LIST_FETCH_LIMIT)
-
-          data = legacyQuery.data
-          error = legacyQuery.error
-
-          if (error) {
-            setStatus(error.message, 'error')
+        const uploadImageButton = document.createElement('button')
+        uploadImageButton.type = 'button'
+        uploadImageButton.className = 'button small'
+        uploadImageButton.textContent = 'Upload image'
+        uploadImageButton.addEventListener('click', async () => {
+          const file = (imageFileInput.files && imageFileInput.files[0]) || block.pendingFile
+          if (!file) {
+            setStatus('Pilih file image terlebih dahulu.', 'error')
             return
           }
-        }
+          if (!validateImageFile(file, 'Block image')) return
 
-        allPosts = (data || []).map((project) => ({
-          ...project,
-          cover_image_url: project.cover_image_url || null,
-          content_blocks: Array.isArray(project.content_blocks) ? project.content_blocks : [],
-        }))
-        const filteredPosts = computeFilteredPosts()
-        renderProjects(filteredPosts)
-        updateMetrics(filteredPosts)
-
-        if (allPosts.length >= LIST_FETCH_LIMIT) {
-          setStatus(`Loaded latest ${LIST_FETCH_LIMIT} posts to keep admin panel responsive.`, 'info')
-        }
-      }
-
-      async function handlePostSubmit(event) {
-        event.preventDefault()
-
-        const id = fields.id.value
-        const title = fields.title.value.trim()
-        const slug = (fields.slug.value.trim() || slugify(title)).toLowerCase()
-        const author = fields.author.value.trim()
-        const description = fields.description.value.trim()
-        const tags = parseTags(fields.tags.value)
-        let coverImageUrl = fields.coverImageUrl.value.trim()
-        const selectedCoverFile = coverImageFileInput.files && coverImageFileInput.files[0]
-
-        if (!title || !slug || !author || !description) {
-          setStatus('Title, slug, author, and description are required.', 'error')
-          return
-        }
-
-        saveButton.disabled = true
-        resetButton.disabled = true
-
-        try {
-          if (selectedCoverFile) {
-            if (!validateImageFile(selectedCoverFile, 'Cover image')) return
-            setStatus('Uploading cover image...', 'info')
-            coverImageUrl = await uploadAssetFile(selectedCoverFile, 'blog-covers')
-            fields.coverImageUrl.value = coverImageUrl
-          }
-
-          const pendingImageBlocks = contentBlocks.filter(
-            (block) => isObject(block) && block.type === 'image' && block.pendingFile instanceof File,
-          )
-
-          for (let index = 0; index < pendingImageBlocks.length; index += 1) {
-            const block = pendingImageBlocks[index]
-            const file = block.pendingFile
-            if (!validateImageFile(file, `Block image ${index + 1}`)) {
-              return
-            }
-
-            setStatus(`Uploading block image ${index + 1}/${pendingImageBlocks.length}...`, 'info')
+          uploadImageButton.disabled = true
+          setStatus('Uploading block image...', 'info')
+          try {
             const publicUrl = await uploadAssetFile(file, 'blog-content')
             block.url = publicUrl
             block.pendingFile = null
-            if (!coverImageUrl) {
-              coverImageUrl = publicUrl
+            imageUrlInput.value = publicUrl
+            imageFileInput.value = ''
+            renderSelectedFileMeta()
+            if (!fields.coverImageUrl.value.trim()) {
               fields.coverImageUrl.value = publicUrl
             }
+            setStatus('Block image uploaded.', 'success')
+          } catch (error) {
+            setStatus(error instanceof Error ? error.message : 'Upload gagal.', 'error')
+          } finally {
+            uploadImageButton.disabled = false
           }
+        })
 
-          const normalizedBlocks = sanitizeBlocksForSave(contentBlocks)
-          const legacyBody = deriveLegacyBody(normalizedBlocks)
-
-          const payload = {
-            title,
-            slug,
-            author,
-            description,
-            tags,
-            body: legacyBody,
-            cover_image_url: coverImageUrl || null,
-            content_blocks: normalizedBlocks,
-          }
-          const nowIso = new Date().toISOString()
-
-          const { error } = id
-            ? await adminWrite({
-                table: 'blog_posts',
-                action: 'update',
-                payload: {
-                  ...payload,
-                  updated_at: nowIso,
-                },
-                filters: [{ column: 'id', operator: 'eq', value: id }],
-              })
-            : await adminWrite({
-                table: 'blog_posts',
-                action: 'insert',
-                payload: {
-                  id: crypto.randomUUID(),
-                  ...payload,
-                  created_at: nowIso,
-                  updated_at: nowIso,
-                },
-              })
-
-          if (error) {
-            const normalizedMessage = String(error).toLowerCase()
-            if (normalizedMessage.includes('cover_image_url') || normalizedMessage.includes('content_blocks')) {
-              setStatus(
-                'Kolom baru belum tersedia. Jalankan SQL terbaru di supabase/schema.sql (bagian blog_posts) lalu coba simpan lagi.',
-                'error',
-              )
-              return
-            }
-            setStatus(error, 'error')
-            return
-          }
-
-          setStatus(id ? 'Post updated.' : 'Post created.', 'success')
-          resetForm()
-          await loadPosts()
-        } catch (error) {
-          setStatus(error instanceof Error ? error.message : 'Save failed.', 'error')
-        } finally {
-          saveButton.disabled = false
-          resetButton.disabled = false
-        }
+        renderSelectedFileMeta()
+        uploadWrap.append(imageFileInput, uploadImageButton)
+        blockBody.append(imageUrlInput, imageAltInput, imageCaptionInput, uploadWrap)
+        blockBody.append(selectedFileMeta)
       }
 
-      async function initialize() {
-        const url = body.dataset.supabaseUrl || ''
-        const key = body.dataset.supabaseAnonKey || ''
+      if (block.type === 'table') {
+        const captionInput = document.createElement('input')
+        captionInput.type = 'text'
+        captionInput.placeholder = 'Caption tabel (opsional)'
+        captionInput.value = block.caption || ''
+        captionInput.addEventListener('input', () => {
+          block.caption = captionInput.value
+        })
 
-        if (!url || !key) {
-          setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
-          return
-        }
+        const headersInput = document.createElement('input')
+        headersInput.type = 'text'
+        headersInput.placeholder = 'Header 1 | Header 2 | Header 3'
+        headersInput.value = Array.isArray(block.headers) ? block.headers.join(' | ') : ''
+        headersInput.addEventListener('input', () => {
+          block.headers = parsePipeRow(headersInput.value)
+        })
 
-        supabase = createClient(url, key)
+        const rowsInput = document.createElement('textarea')
+        rowsInput.placeholder = 'Baris 1 kolom 1 | Baris 1 kolom 2\nBaris 2 kolom 1 | Baris 2 kolom 2'
+        rowsInput.value = serializeRowsToPipeText(block.rows)
+        rowsInput.addEventListener('input', () => {
+          block.rows = rowsInput.value
+            .split('\n')
+            .map((line) => parsePipeRow(line))
+            .filter((row) => row.length > 0)
+        })
 
-        logoutButton.addEventListener('click', async () => {
-          stopSessionTimeoutGuard()
-          clearStoredAdminActivity()
-          const { error } = await supabase.auth.signOut()
-          if (error) {
-            setStatus(error.message, 'error')
+        const importWrap = document.createElement('div')
+        importWrap.className = 'form-actions'
+
+        const tableFileInput = document.createElement('input')
+        tableFileInput.type = 'file'
+        tableFileInput.accept =
+          '.csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+        const importButton = document.createElement('button')
+        importButton.type = 'button'
+        importButton.className = 'button small'
+        importButton.textContent = 'Import CSV/XLS'
+        importButton.addEventListener('click', async () => {
+          const file = tableFileInput.files && tableFileInput.files[0]
+          if (!file) {
+            setStatus('Pilih file CSV/XLS terlebih dahulu.', 'error')
             return
           }
-          window.location.href = '/login'
-        })
 
-        refreshButton.addEventListener('click', loadPosts)
-        resetButton.addEventListener('click', () => {
-          resetForm()
-          setStatus('Form reset.', 'info')
-        })
-        projectForm.addEventListener('submit', handlePostSubmit)
-
-        addParagraphBlockButton.addEventListener('click', () => addBlock('paragraph'))
-        addImageBlockButton.addEventListener('click', () => addBlock('image'))
-        addTableBlockButton.addEventListener('click', () => addBlock('table'))
-
-        fields.title.addEventListener('input', () => {
-          if (!slugDirty) {
-            fields.slug.value = slugify(fields.title.value)
+          importButton.disabled = true
+          setStatus('Mengimpor tabel dari file...', 'info')
+          try {
+            await importTableFromSpreadsheet(file, block)
+            headersInput.value = Array.isArray(block.headers) ? block.headers.join(' | ') : ''
+            rowsInput.value = serializeRowsToPipeText(block.rows)
+            setStatus('Tabel berhasil diimpor dari file.', 'success')
+          } catch (error) {
+            setStatus(error instanceof Error ? error.message : 'Import tabel gagal.', 'error')
+          } finally {
+            importButton.disabled = false
           }
-          updateSlugPreview()
         })
-        fields.slug.addEventListener('input', () => {
-          slugDirty = fields.slug.value.trim().length > 0
-          updateSlugPreview()
+
+        importWrap.append(tableFileInput, importButton)
+
+        blockBody.append(captionInput, headersInput, rowsInput, importWrap)
+      }
+
+      item.append(blockBody)
+      contentBlockList.append(item)
+    })
+
+    updateCounters()
+  }
+
+  function addBlock(type) {
+    if (type === 'paragraph') contentBlocks.push(createParagraphBlock())
+    if (type === 'image') contentBlocks.push(createImageBlock())
+    if (type === 'table') contentBlocks.push(createTableBlock())
+    renderContentBlocks()
+  }
+
+  function resetForm() {
+    fields.id.value = ''
+    fields.title.value = ''
+    fields.slug.value = ''
+    fields.author.value = ''
+    fields.tags.value = ''
+    fields.description.value = ''
+    fields.coverImageUrl.value = ''
+    contentBlocks = []
+    clearSelectedAssetFiles()
+    slugDirty = false
+    saveButton.textContent = 'Save post'
+    updateSlugPreview()
+    renderContentBlocks()
+  }
+
+  function fillForm(project) {
+    fields.id.value = project.id
+    fields.title.value = project.title || ''
+    fields.slug.value = project.slug || ''
+    fields.author.value = project.author || ''
+    fields.tags.value = formatTags(project.tags)
+    fields.description.value = project.description || ''
+    fields.coverImageUrl.value = project.cover_image_url || ''
+    contentBlocks = normalizeBlocks(project.content_blocks, project.body || '')
+    clearSelectedAssetFiles()
+    slugDirty = true
+    saveButton.textContent = 'Update post'
+    updateSlugPreview()
+    renderContentBlocks()
+  }
+
+  function computeFilteredPosts() {
+    const term = searchInput.value.trim().toLowerCase()
+    if (!term) return allPosts
+
+    return allPosts.filter((project) => {
+      const bag = [
+        project.title,
+        project.slug,
+        project.author,
+        project.description,
+        formatTags(project.tags),
+        project.cover_image_url,
+      ]
+        .join(' ')
+        .toLowerCase()
+
+      return bag.includes(term)
+    })
+  }
+
+  function updateMetrics(filteredPosts) {
+    const authorSet = new Set(filteredPosts.map((project) => project.author).filter(Boolean))
+    const tagSet = new Set(
+      filteredPosts.flatMap((project) =>
+        Array.isArray(project.tags) ? project.tags.map((tag) => String(tag).trim()).filter(Boolean) : [],
+      ),
+    )
+
+    metricTotal.textContent = String(allPosts.length)
+    metricVisible.textContent = String(filteredPosts.length)
+    metricAuthors.textContent = String(authorSet.size)
+    metricTags.textContent = String(tagSet.size)
+  }
+
+  function renderProjects(projects) {
+    projectList.innerHTML = ''
+
+    if (!projects.length) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state muted'
+      emptyItem.textContent = searchInput.value.trim()
+        ? `Tidak ada post yang cocok dengan pencarian "${searchInput.value.trim()}".`
+        : 'Belum ada post. Mulai dengan membuat post pertama.'
+      projectList.appendChild(emptyItem)
+      return
+    }
+
+    for (const project of projects) {
+      const li = document.createElement('li')
+      li.className = 'project-item'
+
+      const title = document.createElement('h3')
+      title.textContent = project.title || '(Untitled)'
+
+      const meta = document.createElement('p')
+      meta.className = 'project-meta'
+      meta.textContent = `slug: ${project.slug} | author: ${project.author || '-'} | updated: ${formatDate(project.updated_at)}`
+
+      const desc = document.createElement('p')
+      desc.className = 'project-description'
+      desc.textContent = project.description || ''
+
+      const tags = document.createElement('p')
+      tags.className = 'project-meta'
+      tags.textContent = `tags: ${formatTags(project.tags) || '-'}`
+
+      const blockMeta = document.createElement('p')
+      blockMeta.className = 'project-meta'
+      const blockLength = Array.isArray(project.content_blocks) ? project.content_blocks.length : 0
+      blockMeta.textContent = `blocks: ${blockLength} | cover: ${project.cover_image_url ? 'yes' : 'no'}`
+
+      const actions = document.createElement('div')
+      actions.className = 'project-actions'
+
+      const editButton = document.createElement('button')
+      editButton.type = 'button'
+      editButton.className = 'button small'
+      editButton.textContent = 'Edit'
+      editButton.addEventListener('click', () => {
+        fillForm(project)
+        fields.title.focus()
+        setStatus(`Editing post "${project.title}"`, 'info')
+      })
+
+      const deleteButton = document.createElement('button')
+      deleteButton.type = 'button'
+      deleteButton.className = 'button small'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', async () => {
+        const ok = window.confirm(`Delete post "${project.title}"?`)
+        if (!ok) return
+
+        const { error } = await adminWrite({
+          table: 'blog_posts',
+          action: 'delete',
+          filters: [{ column: 'id', operator: 'eq', value: project.id }],
         })
-        fields.description.addEventListener('input', updateCounters)
-        const runSearch = debounce(() => {
-          const filteredPosts = computeFilteredPosts()
-          renderProjects(filteredPosts)
-          updateMetrics(filteredPosts)
-        }, SEARCH_DEBOUNCE_MS)
-        searchInput.addEventListener('input', runSearch)
-
-        updateSlugPreview()
-        renderContentBlocks()
-
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        if (!session) {
-          window.location.href = '/login'
+        if (error) {
+          setStatus(error, 'error')
           return
         }
 
-        accessToken = session.access_token || ''
-        startSessionTimeoutGuard()
-        appSection.hidden = false
-        setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+        if (fields.id.value === project.id) {
+          resetForm()
+        }
+
+        setStatus('Post deleted.', 'success')
         await loadPosts()
+      })
 
-        supabase.auth.onAuthStateChange((event, nextSession) => {
-          if (event === 'SIGNED_OUT') {
-            stopSessionTimeoutGuard()
-            window.location.href = '/login'
-            return
-          }
-          if (nextSession?.access_token) {
-            accessToken = nextSession.access_token
-            noteActivity(true)
-          }
-        })
+      actions.append(editButton, deleteButton)
+      li.append(title, meta, desc, tags, blockMeta, actions)
+      projectList.appendChild(li)
+    }
+  }
+
+  async function loadPosts() {
+    let data = null
+    let error = null
+
+    const latestQuery = await supabase
+      .from('blog_posts')
+      .select(
+        'id, slug, title, author, description, tags, body, cover_image_url, content_blocks, created_at, updated_at',
+      )
+      .order('updated_at', { ascending: false })
+      .limit(LIST_FETCH_LIMIT)
+
+    data = latestQuery.data
+    error = latestQuery.error
+
+    if (error) {
+      const legacyQuery = await supabase
+        .from('blog_posts')
+        .select('id, slug, title, author, description, tags, body, created_at, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(LIST_FETCH_LIMIT)
+
+      data = legacyQuery.data
+      error = legacyQuery.error
+
+      if (error) {
+        setStatus(error.message, 'error')
+        return
+      }
+    }
+
+    allPosts = (data || []).map((project) => ({
+      ...project,
+      cover_image_url: project.cover_image_url || null,
+      content_blocks: Array.isArray(project.content_blocks) ? project.content_blocks : [],
+    }))
+    const filteredPosts = computeFilteredPosts()
+    renderProjects(filteredPosts)
+    updateMetrics(filteredPosts)
+
+    if (allPosts.length >= LIST_FETCH_LIMIT) {
+      setStatus(`Loaded latest ${LIST_FETCH_LIMIT} posts to keep admin panel responsive.`, 'info')
+    }
+  }
+
+  async function handlePostSubmit(event) {
+    event.preventDefault()
+
+    const id = fields.id.value
+    const title = fields.title.value.trim()
+    const slug = (fields.slug.value.trim() || slugify(title)).toLowerCase()
+    const author = fields.author.value.trim()
+    const description = fields.description.value.trim()
+    const tags = parseTags(fields.tags.value)
+    let coverImageUrl = fields.coverImageUrl.value.trim()
+    const selectedCoverFile = coverImageFileInput.files && coverImageFileInput.files[0]
+
+    if (!title || !slug || !author || !description) {
+      setStatus('Title, slug, author, and description are required.', 'error')
+      return
+    }
+
+    saveButton.disabled = true
+    resetButton.disabled = true
+
+    try {
+      if (selectedCoverFile) {
+        if (!validateImageFile(selectedCoverFile, 'Cover image')) return
+        setStatus('Uploading cover image...', 'info')
+        coverImageUrl = await uploadAssetFile(selectedCoverFile, 'blog-covers')
+        fields.coverImageUrl.value = coverImageUrl
       }
 
-      initialize()
-    </script>
+      const pendingImageBlocks = contentBlocks.filter(
+        (block) => isObject(block) && block.type === 'image' && block.pendingFile instanceof File,
+      )
+
+      for (let index = 0; index < pendingImageBlocks.length; index += 1) {
+        const block = pendingImageBlocks[index]
+        const file = block.pendingFile
+        if (!validateImageFile(file, `Block image ${index + 1}`)) {
+          return
+        }
+
+        setStatus(`Uploading block image ${index + 1}/${pendingImageBlocks.length}...`, 'info')
+        const publicUrl = await uploadAssetFile(file, 'blog-content')
+        block.url = publicUrl
+        block.pendingFile = null
+        if (!coverImageUrl) {
+          coverImageUrl = publicUrl
+          fields.coverImageUrl.value = publicUrl
+        }
+      }
+
+      const normalizedBlocks = sanitizeBlocksForSave(contentBlocks)
+      const legacyBody = deriveLegacyBody(normalizedBlocks)
+
+      const payload = {
+        title,
+        slug,
+        author,
+        description,
+        tags,
+        body: legacyBody,
+        cover_image_url: coverImageUrl || null,
+        content_blocks: normalizedBlocks,
+      }
+      const nowIso = new Date().toISOString()
+
+      const { error } = id
+        ? await adminWrite({
+            table: 'blog_posts',
+            action: 'update',
+            payload: {
+              ...payload,
+              updated_at: nowIso,
+            },
+            filters: [{ column: 'id', operator: 'eq', value: id }],
+          })
+        : await adminWrite({
+            table: 'blog_posts',
+            action: 'insert',
+            payload: {
+              id: crypto.randomUUID(),
+              ...payload,
+              created_at: nowIso,
+              updated_at: nowIso,
+            },
+          })
+
+      if (error) {
+        const normalizedMessage = String(error).toLowerCase()
+        if (normalizedMessage.includes('cover_image_url') || normalizedMessage.includes('content_blocks')) {
+          setStatus(
+            'Kolom baru belum tersedia. Jalankan SQL terbaru di supabase/schema.sql (bagian blog_posts) lalu coba simpan lagi.',
+            'error',
+          )
+          return
+        }
+        setStatus(error, 'error')
+        return
+      }
+
+      setStatus(id ? 'Post updated.' : 'Post created.', 'success')
+      resetForm()
+      await loadPosts()
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Save failed.', 'error')
+    } finally {
+      saveButton.disabled = false
+      resetButton.disabled = false
+    }
+  }
+
+  async function initialize() {
+    const url = body.dataset.supabaseUrl || ''
+    const key = body.dataset.supabaseAnonKey || ''
+
+    if (!url || !key) {
+      setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
+      return
+    }
+
+    supabase = createClient(url, key)
+
+    logoutButton.addEventListener('click', async () => {
+      stopSessionTimeoutGuard()
+      clearStoredAdminActivity()
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        setStatus(error.message, 'error')
+        return
+      }
+      redirectToLogin()
+    })
+
+    refreshButton.addEventListener('click', loadPosts)
+    resetButton.addEventListener('click', () => {
+      resetForm()
+      setStatus('Form reset.', 'info')
+    })
+    projectForm.addEventListener('submit', handlePostSubmit)
+
+    addParagraphBlockButton.addEventListener('click', () => addBlock('paragraph'))
+    addImageBlockButton.addEventListener('click', () => addBlock('image'))
+    addTableBlockButton.addEventListener('click', () => addBlock('table'))
+
+    fields.title.addEventListener('input', () => {
+      if (!slugDirty) {
+        fields.slug.value = slugify(fields.title.value)
+      }
+      updateSlugPreview()
+    })
+    fields.slug.addEventListener('input', () => {
+      slugDirty = fields.slug.value.trim().length > 0
+      updateSlugPreview()
+    })
+    fields.description.addEventListener('input', updateCounters)
+    const runSearch = debounce(() => {
+      const filteredPosts = computeFilteredPosts()
+      renderProjects(filteredPosts)
+      updateMetrics(filteredPosts)
+    }, SEARCH_DEBOUNCE_MS)
+    searchInput.addEventListener('input', runSearch)
+
+    updateSlugPreview()
+    renderContentBlocks()
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) {
+      redirectToLogin()
+      return
+    }
+
+    accessToken = session.access_token || ''
+    setAdminAccessCookie(true)
+    body.removeAttribute('data-admin-auth-pending')
+    startSessionTimeoutGuard()
+    appSection.hidden = false
+    setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+    await loadPosts()
+
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_OUT') {
+        stopSessionTimeoutGuard()
+        redirectToLogin()
+        return
+      }
+      if (nextSession?.access_token) {
+        accessToken = nextSession.access_token
+        setAdminAccessCookie(true)
+        body.removeAttribute('data-admin-auth-pending')
+        appSection.hidden = false
+        noteActivity(true)
+      }
+    })
+  }
+
+  initialize()
+</script>

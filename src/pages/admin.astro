@@ -1,20 +1,6 @@
 ---
 const target = '/admin/about'
----
+const hasAdminAccess = Astro.cookies.get('admin_access')?.value === '1'
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="robots" content="noindex" />
-    <meta http-equiv="refresh" content={`0;url=${target}`} />
-    <title>Redirecting to Admin</title>
-  </head>
-  <body>
-    <p>Redirecting to <a href={target}>{target}</a>...</p>
-    <script is:inline>
-      window.location.replace('/admin/about')
-    </script>
-  </body>
-</html>
+return Astro.redirect(hasAdminAccess ? target : `/login?next=${encodeURIComponent(target)}`, 302)
+---

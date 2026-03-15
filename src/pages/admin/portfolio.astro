@@ -241,6 +241,16 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
       }
 
+      body[data-admin-auth-pending='true'] .admin-header,
+      body[data-admin-auth-pending='true'] .admin-section-nav,
+      body[data-admin-auth-pending='true'] #app-section {
+        display: none !important;
+      }
+
+      body[data-admin-auth-pending='true'] #status {
+        margin-top: clamp(18vh, 24vh, 28vh);
+      }
+
       .workspace {
         display: grid;
         gap: 1rem;
@@ -440,8 +450,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       }
 
       .block-title {
-        font-size: 0.92rem;
         font-weight: 700;
+        font-size: 0.92rem;
       }
 
       .block-actions {
@@ -506,8 +516,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         }
 
         .search-wrap {
-          min-width: 100%;
           width: 100%;
+          min-width: 100%;
         }
 
         .field-inline-meta {
@@ -535,6 +545,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     </style>
   </head>
   <body
+    data-admin-auth-pending="true"
     data-supabase-url={supabaseUrl}
     data-supabase-anon-key={supabaseAnonKey}
     data-supabase-assets-bucket={supabaseAssetsBucket}
@@ -633,8 +644,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
                 <button class="button small" type="button" id="add-table-block">+ Table</button>
               </div>
               <p class="helper">
-                Urutkan isi artikel dengan blok. Untuk tabel: kolom dipisahkan dengan tanda <code>|</code>.
-                File gambar pada blok akan otomatis di-upload saat save jika belum di-upload manual.
+                Urutkan isi artikel dengan blok. Untuk tabel: kolom dipisahkan dengan tanda <code>|</code>. File gambar
+                pada blok akan otomatis di-upload saat save jika belum di-upload manual.
               </p>
               <div class="field-inline-meta">
                 <span>Konten detail proyek.</span><span id="block-count">0 blocks</span>
@@ -691,6 +702,3 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     <PortfolioAdminScript />
   </body>
 </html>
-
-
-

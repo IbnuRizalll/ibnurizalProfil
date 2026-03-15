@@ -229,6 +229,16 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
       }
 
+      body[data-admin-auth-pending='true'] .admin-header,
+      body[data-admin-auth-pending='true'] .admin-section-nav,
+      body[data-admin-auth-pending='true'] #app-section {
+        display: none !important;
+      }
+
+      body[data-admin-auth-pending='true'] #status {
+        margin-top: clamp(18vh, 24vh, 28vh);
+      }
+
       .workspace {
         display: grid;
       }
@@ -357,8 +367,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         border-radius: 999px;
         background: color-mix(in oklab, var(--surface-soft) 72%, transparent);
         padding: 0.2rem 0.55rem;
-        font-size: 0.78rem;
         font-weight: 700;
+        font-size: 0.78rem;
       }
 
       .badge.unread {
@@ -436,8 +446,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         }
 
         .search-wrap {
-          min-width: 100%;
           width: 100%;
+          min-width: 100%;
         }
       }
 
@@ -450,6 +460,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     </style>
   </head>
   <body
+    data-admin-auth-pending="true"
     data-supabase-url={supabaseUrl}
     data-supabase-anon-key={supabaseAnonKey}
     data-admin-idle-timeout-minutes={adminIdleTimeoutMinutes}
@@ -459,7 +470,9 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         <div>
           <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
           <h1>Contact Messages</h1>
-          <p class="lead">Lihat pesan masuk dari halaman contact, tandai sudah dibaca, dan catat metode balasan (email/WhatsApp).</p>
+          <p class="lead">
+            Lihat pesan masuk dari halaman contact, tandai sudah dibaca, dan catat metode balasan (email/WhatsApp).
+          </p>
         </div>
         <div class="header-actions">
           <a class="link-chip" href="/">Preview website</a>
@@ -514,6 +527,3 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     <MessagesAdminScript />
   </body>
 </html>
-
-
-

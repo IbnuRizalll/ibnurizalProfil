@@ -234,6 +234,16 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
       }
 
+      body[data-admin-auth-pending='true'] .admin-header,
+      body[data-admin-auth-pending='true'] .admin-section-nav,
+      body[data-admin-auth-pending='true'] #app-section {
+        display: none !important;
+      }
+
+      body[data-admin-auth-pending='true'] #status {
+        margin-top: clamp(18vh, 24vh, 28vh);
+      }
+
       .editor-panel {
         padding: clamp(1rem, 2.4vw, 1.35rem);
       }
@@ -377,6 +387,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     </style>
   </head>
   <body
+    data-admin-auth-pending="true"
     data-supabase-url={supabaseUrl}
     data-supabase-anon-key={supabaseAnonKey}
     data-supabase-assets-bucket={supabaseAssetsBucket}
@@ -478,5 +489,3 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     <AboutAdminScript />
   </body>
 </html>
-
-

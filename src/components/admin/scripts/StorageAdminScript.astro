@@ -2,6 +2,21 @@
   import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
 
   const body = document.body
+  const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
+
+  function setAdminAccessCookie(isActive) {
+    const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+    const minutes = Number.isFinite(rawValue) ? Math.min(30, Math.max(15, rawValue)) : 20
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+    const maxAge = isActive ? `; Max-Age=${minutes * 60}` : '; Max-Age=0'
+    document.cookie = `${ADMIN_ACCESS_COOKIE_NAME}=${isActive ? '1' : ''}; Path=/; SameSite=Strict${maxAge}${secure}`
+  }
+
+  function redirectToLogin() {
+    setAdminAccessCookie(false)
+    window.location.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`)
+  }
+
   const statusEl = document.getElementById('status')
   const appSection = document.getElementById('app-section')
   const logoutButton = document.getElementById('logout-button')
@@ -95,7 +110,8 @@
       await supabase.auth.signOut()
     } catch {}
 
-    window.location.href = '/login?reason=timeout'
+    setAdminAccessCookie(false)
+    window.location.replace('/login?reason=timeout')
   }
 
   function scheduleIdleTimeout() {
@@ -199,7 +215,11 @@
   function computeFilteredOrphans() {
     const term = searchInput.value.trim().toLowerCase()
     if (!term) return allOrphans
-    return allOrphans.filter((entry) => String(entry.path || '').toLowerCase().includes(term))
+    return allOrphans.filter((entry) =>
+      String(entry.path || '')
+        .toLowerCase()
+        .includes(term),
+    )
   }
 
   function updateMetrics() {
@@ -217,8 +237,7 @@
     const selectedCount = selectedPaths.size
 
     deleteSelectedButton.disabled = isBusy || selectedCount === 0
-    deleteSelectedButton.textContent =
-      selectedCount > 0 ? `Delete Selected (${selectedCount})` : 'Delete Selected'
+    deleteSelectedButton.textContent = selectedCount > 0 ? `Delete Selected (${selectedCount})` : 'Delete Selected'
 
     if (selectableCount === 0) {
       selectAllCheckbox.checked = false
@@ -378,9 +397,7 @@
       renderOrphans()
 
       if (!silent) {
-        const truncatedText = result.body?.truncated
-          ? ` Showing first ${allOrphans.length} results.`
-          : ''
+        const truncatedText = result.body?.truncated ? ` Showing first ${allOrphans.length} results.` : ''
         setStatus(
           `Scan complete. ${summary.orphanObjects || 0} orphan file(s) found in bucket "${result.body?.bucket || ''}".${truncatedText}`.trim(),
           'success',
@@ -418,7 +435,9 @@
 
       const deletedCount = Number(result.body?.deletedCount || 0)
       const failedCount = Array.isArray(result.body?.failed) ? result.body.failed.length : 0
-      const skippedReferencedCount = Array.isArray(result.body?.skippedReferenced) ? result.body.skippedReferenced.length : 0
+      const skippedReferencedCount = Array.isArray(result.body?.skippedReferenced)
+        ? result.body.skippedReferenced.length
+        : 0
 
       selectedPaths.clear()
       await scanOrphans(true)
@@ -474,7 +493,9 @@
         return
       }
 
-      const confirmed = window.confirm(`Delete ${candidates.length} selected orphan file(s)? This action cannot be undone.`)
+      const confirmed = window.confirm(
+        `Delete ${candidates.length} selected orphan file(s)? This action cannot be undone.`,
+      )
       if (!confirmed) return
       await deleteOrphans(candidates, 'selected')
     })
@@ -490,7 +511,10 @@
         `Delete ALL ${allOrphans.length} orphan file(s) in bucket "${body.dataset.supabaseAssetsBucket || 'site-assets'}"? This action cannot be undone.`,
       )
       if (!confirmed) return
-      await deleteOrphans(allOrphans.map((entry) => entry.path), 'orphan')
+      await deleteOrphans(
+        allOrphans.map((entry) => entry.path),
+        'orphan',
+      )
     })
   }
 
@@ -513,7 +537,7 @@
         setStatus(error.message, 'error')
         return
       }
-      window.location.href = '/login'
+      redirectToLogin()
     })
 
     attachEvents()
@@ -525,11 +549,13 @@
     } = await supabase.auth.getSession()
 
     if (!session) {
-      window.location.href = '/login'
+      redirectToLogin()
       return
     }
 
     accessToken = session.access_token || ''
+    setAdminAccessCookie(true)
+    body.removeAttribute('data-admin-auth-pending')
     startSessionTimeoutGuard()
     appSection.hidden = false
     setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
@@ -538,11 +564,14 @@
     supabase.auth.onAuthStateChange((event, nextSession) => {
       if (event === 'SIGNED_OUT') {
         stopSessionTimeoutGuard()
-        window.location.href = '/login'
+        redirectToLogin()
         return
       }
       if (nextSession?.access_token) {
         accessToken = nextSession.access_token
+        setAdminAccessCookie(true)
+        body.removeAttribute('data-admin-auth-pending')
+        appSection.hidden = false
         noteActivity(true)
       }
     })

@@ -234,6 +234,16 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         border-color: color-mix(in oklab, var(--status-error) 52%, var(--border-soft));
       }
 
+      body[data-admin-auth-pending='true'] .admin-header,
+      body[data-admin-auth-pending='true'] .admin-section-nav,
+      body[data-admin-auth-pending='true'] #app-section {
+        display: none !important;
+      }
+
+      body[data-admin-auth-pending='true'] #status {
+        margin-top: clamp(18vh, 24vh, 28vh);
+      }
+
       .workspace {
         display: grid;
       }
@@ -265,8 +275,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       .toolbar-row {
         display: flex;
         flex-wrap: wrap;
-        align-items: center;
         justify-content: space-between;
+        align-items: center;
         gap: 0.75rem;
         margin-bottom: 0.8rem;
       }
@@ -297,8 +307,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .selection-wrap {
         display: inline-flex;
-        gap: 0.45rem;
         align-items: center;
+        gap: 0.45rem;
         font-size: 0.9rem;
       }
 
@@ -345,8 +355,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .orphan-top {
         display: flex;
-        gap: 0.55rem;
         align-items: center;
+        gap: 0.55rem;
       }
 
       .orphan-check {
@@ -399,8 +409,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         }
 
         .search-wrap {
-          min-width: 100%;
           width: 100%;
+          min-width: 100%;
         }
       }
 
@@ -413,6 +423,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     </style>
   </head>
   <body
+    data-admin-auth-pending="true"
     data-supabase-url={supabaseUrl}
     data-supabase-anon-key={supabaseAnonKey}
     data-supabase-assets-bucket={supabaseAssetsBucket}
