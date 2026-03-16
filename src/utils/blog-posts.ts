@@ -23,16 +23,15 @@ export interface BlogPost {
   body: string
   coverImageUrl: string | null
   contentBlocks: BlogContentBlock[]
-  isVisible: boolean
   createdAt: string | null
 }
 
 type SupabaseBlogRow = SupabaseContentRow
 
-const BLOG_POSTS_LIST_LATEST_SELECT = 'id,slug,title,author,description,tags,cover_image_url,is_visible,created_at'
+const BLOG_POSTS_LIST_LATEST_SELECT = 'id,slug,title,author,description,tags,cover_image_url,created_at'
 const BLOG_POSTS_LIST_LEGACY_SELECT = 'id,slug,title,author,description,tags,created_at'
 const BLOG_POSTS_DETAIL_LATEST_SELECT =
-  'id,slug,title,author,description,tags,body,cover_image_url,content_blocks,is_visible,created_at'
+  'id,slug,title,author,description,tags,body,cover_image_url,content_blocks,created_at'
 const BLOG_POSTS_DETAIL_LEGACY_SELECT = 'id,slug,title,author,description,tags,body,created_at'
 
 interface GetBlogPostsOptions {
@@ -53,9 +52,7 @@ export async function getBlogPosts(options: GetBlogPostsOptions = {}): Promise<B
     cacheTtlMs,
   })
 
-  return rows
-    .map((row) => normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled post' }))
-    .filter((post) => post.isVisible !== false)
+  return rows.map((row) => normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled post' }))
 }
 
 export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
@@ -75,6 +72,5 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> 
   const row = rows[0]
   if (!row) return null
 
-  const post = normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled post' })
-  return post.isVisible === false ? null : post
+  return normalizeSupabaseContentEntity(row, { fallbackTitle: 'Untitled post' })
 }
