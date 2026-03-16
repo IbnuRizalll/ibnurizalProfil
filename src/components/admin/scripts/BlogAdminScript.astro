@@ -389,6 +389,37 @@
     }
   }
 
+  async function adminRead(body) {
+    try {
+      const response = await authorizedApiRequest('/api/admin/supabase-read', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      })
+
+      let responseBody = null
+      try {
+        responseBody = await response.json()
+      } catch {
+        responseBody = null
+      }
+
+      if (!response.ok) {
+        return {
+          error: responseBody && typeof responseBody.error === 'string' ? responseBody.error : 'Request gagal.',
+        }
+      }
+
+      return { error: null, data: Array.isArray(responseBody?.data) ? responseBody.data : [] }
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Request gagal.',
+      }
+    }
+  }
+
   function slugify(value) {
     return value
       .toLowerCase()
@@ -1323,37 +1354,17 @@
   }
 
   async function loadPosts() {
-    let data = null
-    let error = null
-
-    const latestQuery = await supabase
-      .from('blog_posts')
-      .select(
-        'id, slug, title, author, description, tags, body, cover_image_url, content_blocks, is_visible, created_at, updated_at',
-      )
-      .order('updated_at', { ascending: false })
-      .limit(LIST_FETCH_LIMIT)
-
-    data = latestQuery.data
-    error = latestQuery.error
+    const { data, error } = await adminRead({
+      table: 'blog_posts',
+      limit: LIST_FETCH_LIMIT,
+    })
 
     if (error) {
-      const legacyQuery = await supabase
-        .from('blog_posts')
-        .select('id, slug, title, author, description, tags, body, created_at, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(LIST_FETCH_LIMIT)
-
-      data = legacyQuery.data
-      error = legacyQuery.error
-
-      if (error) {
-        setStatus(error.message, 'error')
-        return
-      }
+      setStatus(error, 'error')
+      return
     }
 
-    allPosts = (data || []).map((project) => ({
+    allPosts = (Array.isArray(data) ? data : []).map((project) => ({
       ...project,
       cover_image_url: project.cover_image_url || null,
       content_blocks: Array.isArray(project.content_blocks) ? project.content_blocks : [],
