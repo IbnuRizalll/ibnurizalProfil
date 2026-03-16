@@ -35,6 +35,7 @@ const {
 
 const sliderSlug = slugify(title || 'highlight-slider')
 const sliderId = `highlight-slider-${sliderSlug}`
+const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
 ---
 
 <section class:list={[className, 'highlight-showcase my-20 md:my-28 lg:my-36']} data-scroll-reveal-disabled>
@@ -80,7 +81,15 @@ const sliderId = `highlight-slider-${sliderSlug}`
                 >
                   <a class="showcase-panel-link" href={item.url}>
                     <figure class="showcase-media">
-                      <img src={item.image} alt="" loading={index === 0 ? 'eager' : 'lazy'} decoding="async" />
+                      <img
+                        src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
+                        data-src={index === 0 ? undefined : item.image}
+                        data-slider-panel-image
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        fetchpriority="low"
+                      />
                     </figure>
 
                     <div class="showcase-content">
@@ -121,7 +130,15 @@ const sliderId = `highlight-slider-${sliderSlug}`
                     aria-pressed={index === 0 ? 'true' : 'false'}
                   >
                     <span class="showcase-preview-image">
-                      <img src={item.image} alt="" loading="lazy" decoding="async" />
+                      <img
+                        src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
+                        data-src={index === 0 ? undefined : item.image}
+                        data-slider-preview-image
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        fetchpriority="low"
+                      />
                     </span>
                     <span class="showcase-preview-copy">
                       <span class="showcase-preview-title">{item.title}</span>
@@ -169,6 +186,9 @@ const sliderId = `highlight-slider-${sliderSlug}`
       const nextButton = slider.parentElement?.querySelector('[data-slider-next]')
       const currentCounter = slider.parentElement?.querySelector('[data-slider-current]')
       const stage = slider.querySelector('[data-slider-stage]')
+      const rail = slider.querySelector('[data-slider-rail]')
+      const panelImages = panels.map((panel) => panel.querySelector('[data-slider-panel-image]'))
+      const previewImages = triggers.map((trigger) => trigger.querySelector('[data-slider-preview-image]'))
       const total = panels.length
 
       if (total === 0) return
@@ -178,9 +198,74 @@ const sliderId = `highlight-slider-${sliderSlug}`
       let touchStartY = 0
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
+      const loadImage = (image: Element | null) => {
+        if (!(image instanceof HTMLImageElement)) return
+        const nextSrc = image.dataset.src
+        if (!nextSrc) return
+        image.src = nextSrc
+        image.removeAttribute('data-src')
+      }
+
+      const loadAdjacentPanels = (index: number) => {
+        ;[index, index - 1, index + 1].forEach((candidateIndex) => {
+          const normalizedIndex = (candidateIndex + total) % total
+          loadImage(panelImages[normalizedIndex] ?? null)
+          loadImage(previewImages[normalizedIndex] ?? null)
+        })
+      }
+
+      const previewImageObserver =
+        'IntersectionObserver' in window
+          ? new IntersectionObserver(
+              (entries, observer) => {
+                entries.forEach((entry) => {
+                  if (!entry.isIntersecting) return
+                  loadImage(entry.target)
+                  observer.unobserve(entry.target)
+                })
+              },
+              {
+                root: rail instanceof HTMLElement ? rail : null,
+                rootMargin: '120px',
+              },
+            )
+          : null
+
+      previewImages.forEach((image, index) => {
+        if (!(image instanceof HTMLImageElement) || index === 0 || !image.dataset.src) return
+        if (previewImageObserver) {
+          previewImageObserver.observe(image)
+        } else if (index < 3) {
+          loadImage(image)
+        }
+      })
+
+      const stageImageObserver =
+        'IntersectionObserver' in window
+          ? new IntersectionObserver(
+              (entries, observer) => {
+                entries.forEach((entry) => {
+                  if (!entry.isIntersecting) return
+                  loadAdjacentPanels(activeIndex)
+                  observer.disconnect()
+                })
+              },
+              {
+                rootMargin: '240px 0px',
+              },
+            )
+          : null
+
+      if (stage instanceof HTMLElement && stageImageObserver) {
+        stageImageObserver.observe(stage)
+      } else {
+        loadAdjacentPanels(activeIndex)
+      }
+
       const updateSlider = (nextIndex: number, shouldFocusTrigger = false) => {
         activeIndex = (nextIndex + total) % total
         slider.dataset.activeIndex = String(activeIndex)
+        loadAdjacentPanels(activeIndex)
 
         panels.forEach((panel, index) => {
           if (!(panel instanceof HTMLElement)) return
@@ -676,6 +761,19 @@ const sliderId = `highlight-slider-${sliderSlug}`
     .showcase-stage {
       min-height: 0;
     }
+  }
+
+  .showcase-media img,
+  .showcase-preview-image img {
+    opacity: 1;
+    transition:
+      opacity 220ms ease,
+      transform 480ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+
+  .showcase-media img[data-src],
+  .showcase-preview-image img[data-src] {
+    opacity: 0;
   }
 
   @media (prefers-reduced-motion: reduce) {

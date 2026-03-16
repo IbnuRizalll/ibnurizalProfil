@@ -146,7 +146,7 @@ const blogPostStructuredData = isNotFound
               </div>
             ) : block.type === 'image' ? (
               <figure>
-                <img src={block.url} alt={block.alt || ''} loading="lazy" decoding="async" />
+                <img src={block.url} alt={block.alt || ''} loading="lazy" decoding="async" fetchpriority="low" />
                 {block.caption && <figcaption>{block.caption}</figcaption>}
               </figure>
             ) : (

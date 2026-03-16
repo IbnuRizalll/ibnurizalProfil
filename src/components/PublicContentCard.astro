@@ -1,0 +1,172 @@
+---
+import { Heading, Link } from 'accessible-astro-components'
+
+interface Props {
+  class?: string
+  title: string
+  img: string
+  url: string
+  imageAlt?: string
+  headingLevel?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  headingSize?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+  footer?: string
+  fullHeight?: boolean
+  imageLoading?: 'lazy' | 'eager'
+  fetchpriority?: 'high' | 'low' | 'auto'
+  width?: number
+  height?: number
+}
+
+const {
+  class: className,
+  title,
+  img,
+  url,
+  imageAlt = '',
+  headingLevel = 'h3',
+  headingSize = 'h6',
+  footer = '',
+  fullHeight = false,
+  imageLoading = 'lazy',
+  fetchpriority = 'low',
+  width = 640,
+  height = 360,
+} = Astro.props
+---
+
+<article class:list={['public-content-card', { 'public-content-card--full-height': fullHeight }, className]}>
+  <div class="public-content-card__image">
+    <img
+      src={img}
+      alt={imageAlt}
+      width={width}
+      height={height}
+      loading={imageLoading}
+      decoding="async"
+      fetchpriority={fetchpriority}
+    />
+  </div>
+  <div class="public-content-card__content">
+    <div class="public-content-card__title">
+      <Heading level={headingLevel} size={headingSize}>
+        <Link href={url}>{title}</Link>
+      </Heading>
+    </div>
+    <div class="public-content-card__meta"><slot name="meta" /></div>
+    <p class="public-content-card__description"><slot /></p>
+    {footer && <small class="public-content-card__footer">{footer}</small>}
+  </div>
+</article>
+
+<style>
+  :where(.public-content-card) {
+    --transition-duration: 0.3s;
+    --transition-easing: cubic-bezier(0.165, 0.84, 0.44, 1);
+
+    display: flex;
+    position: relative;
+    flex-direction: column;
+    border: 2px solid light-dark(hsl(0 0% 10%), hsl(0 0% 90%));
+    border-radius: 0.5rem;
+    max-inline-size: 60ch;
+    max-block-size: 100%;
+    overflow: hidden;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :where(.public-content-card) {
+      transition: box-shadow var(--transition-duration) var(--transition-easing);
+    }
+  }
+
+  :where(.public-content-card--full-height) {
+    block-size: 100%;
+  }
+
+  :where(.public-content-card:hover),
+  :where(.public-content-card:focus-within) {
+    box-shadow: 0 0 0 0.25rem;
+  }
+
+  :where(.public-content-card:focus-within) a:focus {
+    outline: none;
+    box-shadow: none;
+    text-decoration: none;
+  }
+
+  :where(.public-content-card__image) {
+    background: color-mix(in oklab, var(--background-color) 88%, black 12%);
+    block-size: 250px;
+    overflow: clip;
+  }
+
+  :where(.public-content-card__image img) {
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :where(.public-content-card__image img) {
+      transition: transform var(--transition-duration) var(--transition-easing);
+    }
+  }
+
+  :where(.public-content-card__content) {
+    display: flex;
+    flex-grow: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-inline: 1rem;
+    padding-block: 1rem;
+  }
+
+  :where(.public-content-card a) {
+    color: currentColor;
+    text-decoration: none;
+  }
+
+  :where(.public-content-card a:hover),
+  :where(.public-content-card a:focus-visible) {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+
+  :where(.public-content-card:has(a:hover, a:focus-visible) .public-content-card__image img) {
+    transform: scale(1.05);
+  }
+
+  :where(.public-content-card__title a)::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+  }
+
+  :where(.public-content-card__meta) {
+    order: -1;
+    margin-block-start: 0.5rem;
+  }
+
+  :where(.public-content-card__meta) :global(span) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :where(.public-content-card__meta:empty) {
+    display: none;
+  }
+
+  :where(.public-content-card__description) {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  :where(.public-content-card__footer) {
+    margin-block-start: auto;
+    color: color-mix(in oklab, var(--text-color) 74%, transparent);
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+</style>

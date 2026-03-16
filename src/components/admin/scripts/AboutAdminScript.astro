@@ -46,23 +46,74 @@
   const ADMIN_ACTIVITY_STORAGE_KEY = 'admin:last-activity-at'
   const ADMIN_ACTIVITY_THROTTLE_MS = 5000
   const MAX_ASSET_INPUT_BYTES = 20 * 1024 * 1024
-  const MAX_ASSET_UPLOAD_BYTES = 4 * 1024 * 1024
   const IMAGE_COMPRESS_MIN_RATIO = 0.96
   const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
-  const IMAGE_COMPRESSION_PLANS = [
-    { mime: 'image/webp', maxWidth: 1920, maxHeight: 1920, quality: 0.82 },
-    { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.74 },
-    { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
-    { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
-    { mime: 'image/webp', maxWidth: 960, maxHeight: 960, quality: 0.56 },
-    { mime: 'image/webp', maxWidth: 720, maxHeight: 720, quality: 0.48 },
-    { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
-    { mime: 'image/jpeg', maxWidth: 1024, maxHeight: 1024, quality: 0.6 },
-    { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.52 },
-    { mime: 'image/jpeg', maxWidth: 800, maxHeight: 800, quality: 0.54 },
-    { mime: 'image/jpeg', maxWidth: 720, maxHeight: 720, quality: 0.44 },
-    { mime: 'image/jpeg', maxWidth: 640, maxHeight: 640, quality: 0.4 },
-  ]
+  const IMAGE_UPLOAD_PROFILES = {
+    default: {
+      maxUploadBytes: Math.round(2.2 * 1024 * 1024),
+      plans: [
+        { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.8 },
+        { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.72 },
+        { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.66 },
+        { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.68 },
+        { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.58 },
+      ],
+      jpegFallback: { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.56 },
+    },
+    cover: {
+      maxUploadBytes: Math.round(1.8 * 1024 * 1024),
+      plans: [
+        { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.8 },
+        { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.72 },
+        { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.64 },
+        { mime: 'image/webp', maxWidth: 960, maxHeight: 960, quality: 0.58 },
+        { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.66 },
+        { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.56 },
+      ],
+      jpegFallback: { mime: 'image/jpeg', maxWidth: 960, maxHeight: 960, quality: 0.54 },
+    },
+    content: {
+      maxUploadBytes: Math.round(1.4 * 1024 * 1024),
+      plans: [
+        { mime: 'image/webp', maxWidth: 1440, maxHeight: 1440, quality: 0.78 },
+        { mime: 'image/webp', maxWidth: 1280, maxHeight: 1280, quality: 0.7 },
+        { mime: 'image/webp', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
+        { mime: 'image/webp', maxWidth: 900, maxHeight: 900, quality: 0.56 },
+        { mime: 'image/jpeg', maxWidth: 1080, maxHeight: 1080, quality: 0.62 },
+        { mime: 'image/jpeg', maxWidth: 900, maxHeight: 900, quality: 0.54 },
+      ],
+      jpegFallback: { mime: 'image/jpeg', maxWidth: 900, maxHeight: 900, quality: 0.52 },
+    },
+    hero: {
+      maxUploadBytes: Math.round(2.4 * 1024 * 1024),
+      plans: [
+        { mime: 'image/webp', maxWidth: 1920, maxHeight: 1920, quality: 0.82 },
+        { mime: 'image/webp', maxWidth: 1600, maxHeight: 1600, quality: 0.76 },
+        { mime: 'image/webp', maxWidth: 1366, maxHeight: 1366, quality: 0.7 },
+        { mime: 'image/jpeg', maxWidth: 1600, maxHeight: 1600, quality: 0.7 },
+        { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.62 },
+      ],
+      jpegFallback: { mime: 'image/jpeg', maxWidth: 1280, maxHeight: 1280, quality: 0.6 },
+    },
+    logo: {
+      maxUploadBytes: Math.round(0.75 * 1024 * 1024),
+      plans: [
+        { mime: 'image/webp', maxWidth: 960, maxHeight: 960, quality: 0.9 },
+        { mime: 'image/webp', maxWidth: 720, maxHeight: 720, quality: 0.84 },
+        { mime: 'image/webp', maxWidth: 512, maxHeight: 512, quality: 0.76 },
+        { mime: 'image/png', maxWidth: 720, maxHeight: 720, quality: 0.92 },
+      ],
+      jpegFallback: { mime: 'image/jpeg', maxWidth: 512, maxHeight: 512, quality: 0.72 },
+    },
+  }
+  const IMAGE_UPLOAD_PROFILE_BY_FOLDER = {
+    'portfolio-covers': 'cover',
+    'blog-covers': 'cover',
+    'portfolio-content': 'content',
+    'blog-content': 'content',
+    heroes: 'hero',
+    logos: 'logo',
+  }
   const defaultSettings = {
     id: SETTINGS_ROW_ID,
     logo_url: '',
@@ -384,6 +435,16 @@
     return match ? match[1] : 'bin'
   }
 
+  function getImageUploadProfile(folder) {
+    const profileKey = IMAGE_UPLOAD_PROFILE_BY_FOLDER[folder] || 'default'
+    return IMAGE_UPLOAD_PROFILES[profileKey]
+  }
+
+  function formatUploadSize(bytes) {
+    const megabytes = bytes / (1024 * 1024)
+    return Number.isInteger(megabytes) ? `${megabytes}MB` : `${megabytes.toFixed(1)}MB`
+  }
+
   async function compressImageForUpload(
     file,
     outputMime = 'image/webp',
@@ -416,6 +477,7 @@
       const targetWidth = Math.max(1, Math.round(bitmap.width * scale))
       const targetHeight = Math.max(1, Math.round(bitmap.height * scale))
 
+      const wasResized = targetWidth < bitmap.width || targetHeight < bitmap.height
       const canvas = document.createElement('canvas')
       canvas.width = targetWidth
       canvas.height = targetHeight
@@ -434,7 +496,9 @@
         return file
       }
 
-      if (compressedBlob.size >= file.size * IMAGE_COMPRESS_MIN_RATIO) {
+      const isMeaningfullySmaller = compressedBlob.size < file.size * IMAGE_COMPRESS_MIN_RATIO
+      const isSmallerAfterResize = wasResized && compressedBlob.size < file.size
+      if (!isMeaningfullySmaller && !isSmallerAfterResize) {
         return file
       }
 
@@ -471,17 +535,20 @@
   }
 
   async function uploadAssetFile(file, folder) {
+    const profile = getImageUploadProfile(folder)
     let uploadCandidate = file
-    for (const plan of IMAGE_COMPRESSION_PLANS) {
+    for (const plan of profile.plans) {
       const compressed = await compressImageForUpload(file, plan.mime, plan.maxWidth, plan.maxHeight, plan.quality)
       if (compressed.size < uploadCandidate.size) {
         uploadCandidate = compressed
       }
-      if (uploadCandidate.size <= MAX_ASSET_UPLOAD_BYTES) break
+      if (uploadCandidate !== file && uploadCandidate.size <= profile.maxUploadBytes) break
     }
 
-    if (uploadCandidate.size > MAX_ASSET_UPLOAD_BYTES) {
-      throw new Error('Gambar otomatis dikompres, tetapi ukurannya masih di atas 4MB. Coba gunakan gambar dengan resolusi lebih kecil.')
+    if (uploadCandidate.size > profile.maxUploadBytes) {
+      throw new Error(
+        `Gambar otomatis dikompres, tetapi ukurannya masih di atas ${formatUploadSize(profile.maxUploadBytes)}. Coba gunakan gambar dengan resolusi lebih kecil.`,
+      )
     }
 
     const uploadOne = async (candidateFile) => {
@@ -539,8 +606,15 @@
         (message.includes('mime') || message.includes('allowed') || message.includes('invalid'))
 
       if (canRetryJpeg) {
-        const jpegCandidate = await compressImageForUpload(file, 'image/jpeg', 800, 800, 0.54)
-        if (jpegCandidate.size <= MAX_ASSET_UPLOAD_BYTES) {
+        const fallbackPlan = profile.jpegFallback
+        const jpegCandidate = await compressImageForUpload(
+          file,
+          fallbackPlan.mime,
+          fallbackPlan.maxWidth,
+          fallbackPlan.maxHeight,
+          fallbackPlan.quality,
+        )
+        if (jpegCandidate.size <= profile.maxUploadBytes) {
           const retryResult = await uploadOne(jpegCandidate)
           uploadError = retryResult.error
           filePath = retryResult.filePath

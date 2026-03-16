@@ -1,7 +1,8 @@
 ---
 import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
-import { Badge, Card, Pagination } from 'accessible-astro-components'
+import { Badge, Pagination } from 'accessible-astro-components'
+import PublicContentCard from '@components/PublicContentCard.astro'
 import { getPaginatedBlogPosts } from '@server/content/blog-posts'
 
 const PAGE_SIZE = 6
@@ -68,7 +69,9 @@ const lastPageHref = safePage < lastPage ? `/blog/${lastPage}` : null
         {
           pagePosts.map((post) => (
             <li>
-              <Card
+              <PublicContentCard
+                imageLoading="lazy"
+                fetchpriority="low"
                 img={post.featuredImage}
                 url={'/blog/' + post.slug}
                 title={post.title}
@@ -82,7 +85,7 @@ const lastPageHref = safePage < lastPage ? `/blog/${lastPage}` : null
                   ))}
                 </span>
                 {post.description}
-              </Card>
+              </PublicContentCard>
             </li>
           ))
         }
