@@ -27,43 +27,65 @@ const { class: className } = Astro.props
 </button>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
-    // variables
-    const responsiveToggle = document.querySelector('.responsive-toggle')
-    if (!responsiveToggle) return
+  declare global {
+    interface Window {
+      __responsiveToggleCleanup?: (() => void) | undefined
+      __responsiveToggleListenerBound?: boolean | undefined
+    }
+  }
 
-    // functions
-    const openMenu = (toggle: Element) => {
-      const text = toggle.querySelector('span')
-      const icon = toggle.querySelector('svg')
-      if (!text || !icon) return
+  const initResponsiveToggle = () => {
+    if (typeof window === 'undefined') return
 
-      text.textContent = 'Close'
-      toggle.setAttribute('aria-expanded', 'true')
-      toggle.setAttribute('aria-label', 'Close menu navigation')
-      icon.innerHTML = `<path d="M10 10 2 2m8 8 8 8m-8-8 8-8m-8 8-8 8" stroke="var(--foreground-color)" stroke-width="2.667" stroke-linecap="round" stroke-linejoin="round"/>`
+    if (typeof window.__responsiveToggleCleanup === 'function') {
+      window.__responsiveToggleCleanup()
+      window.__responsiveToggleCleanup = undefined
     }
 
-    const closeMenu = (toggle: Element) => {
-      const text = toggle.querySelector('span')
-      const icon = toggle.querySelector('svg')
+    const responsiveToggle = document.querySelector<HTMLElement>('.responsive-toggle')
+    const mobileNavigation = document.querySelector<HTMLElement>('.mobile-menu')
+    if (!responsiveToggle || !mobileNavigation) return
+
+    const controller = new AbortController()
+    const { signal } = controller
+
+    const setToggleState = (isOpen: boolean) => {
+      const text = responsiveToggle.querySelector('span')
+      const icon = responsiveToggle.querySelector('svg')
       if (!text || !icon) return
 
-      text.textContent = 'Menu'
-      toggle.setAttribute('aria-expanded', 'false')
-      toggle.setAttribute('aria-label', 'Open menu navigation')
-      icon.innerHTML = `<path d="M2 1.667h24m-24 8h24m-24 8h24" stroke="var(--foreground-color)" stroke-width="2.667" stroke-linecap="round" stroke-linejoin="round"/>`
+      text.textContent = isOpen ? 'Close' : 'Menu'
+      responsiveToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false')
+      responsiveToggle.setAttribute('aria-label', isOpen ? 'Close menu navigation' : 'Open menu navigation')
+      mobileNavigation.classList.toggle('show', isOpen)
+      icon.innerHTML = isOpen
+        ? `<path d="M10 10 2 2m8 8 8 8m-8-8 8-8m-8 8-8 8" stroke="var(--foreground-color)" stroke-width="2.667" stroke-linecap="round" stroke-linejoin="round"/>`
+        : `<path d="M2 1.667h24m-24 8h24m-24 8h24" stroke="var(--foreground-color)" stroke-width="2.667" stroke-linecap="round" stroke-linejoin="round"/>`
     }
 
-    // execution
-    responsiveToggle.addEventListener('click', () => {
-      const mobileNavigation = document.querySelector('.mobile-menu')
-      if (!mobileNavigation) return
+    const handleToggleClick = () => {
+      const isOpen = mobileNavigation.classList.contains('show')
+      setToggleState(!isOpen)
+    }
 
-      mobileNavigation.classList.toggle('show')
-      mobileNavigation.classList.contains('show') ? openMenu(responsiveToggle) : closeMenu(responsiveToggle)
-    })
-  })
+    const closeMenu = () => setToggleState(false)
+
+    responsiveToggle.addEventListener('click', handleToggleClick, { signal })
+    window.addEventListener('site-mobile-nav:close', closeMenu, { signal })
+
+    setToggleState(mobileNavigation.classList.contains('show'))
+
+    window.__responsiveToggleCleanup = () => {
+      controller.abort()
+    }
+  }
+
+  initResponsiveToggle()
+
+  if (!window.__responsiveToggleListenerBound) {
+    document.addEventListener('astro:page-load', initResponsiveToggle)
+    window.__responsiveToggleListenerBound = true
+  }
 </script>
 
 <style lang="scss">
@@ -71,8 +93,8 @@ const { class: className } = Astro.props
 
   .responsive-toggle {
     display: none;
-    align-items: center;
     justify-content: center;
+    align-items: center;
     border: none;
     background: transparent;
     padding: 0;

@@ -2,8 +2,8 @@
 import { Launcher, LauncherPreferences, LauncherSwitch, LauncherNav, LauncherLink } from 'accessible-astro-launcher'
 import { Icon } from 'astro-icon/components'
 import themeConfig from '@theme-config'
-import { getProjects } from '@server/content/projects'
-import { getBlogPosts } from '@server/content/blog-posts'
+import { getProjectSearchIndex } from '@server/content/projects'
+import { getBlogPostSearchIndex } from '@server/content/blog-posts'
 
 // Package typings are stricter than runtime usage for slotted children.
 const LauncherAny = Launcher as any
@@ -11,6 +11,7 @@ const LauncherPreferencesAny = LauncherPreferences as any
 const LauncherSwitchAny = LauncherSwitch as any
 const LauncherNavAny = LauncherNav as any
 const LauncherLinkAny = LauncherLink as any
+const LAUNCHER_CONTENT_CACHE_TTL_MS = 30000
 
 interface LauncherPreferenceItem {
   label: string
@@ -48,13 +49,18 @@ const launcherPreferenceItems: LauncherPreferenceItem[] = [
   },
 ]
 
-const launcherProjectItems: LauncherKeywordItem[] = (await getProjects()).map((project) => ({
+const [projectSearchIndex, blogSearchIndex] = await Promise.all([
+  getProjectSearchIndex({ cacheTtlMs: LAUNCHER_CONTENT_CACHE_TTL_MS }),
+  getBlogPostSearchIndex({ cacheTtlMs: LAUNCHER_CONTENT_CACHE_TTL_MS }),
+])
+
+const launcherProjectItems: LauncherKeywordItem[] = projectSearchIndex.map((project) => ({
   label: project.title,
   href: `/portfolio/${project.slug}`,
   keywords: [project.author, ...project.tags],
 }))
 
-const launcherBlogItems: LauncherKeywordItem[] = (await getBlogPosts()).map((post) => ({
+const launcherBlogItems: LauncherKeywordItem[] = blogSearchIndex.map((post) => ({
   label: post.title,
   href: `/blog/${post.slug}`,
   keywords: [post.author, ...post.tags],

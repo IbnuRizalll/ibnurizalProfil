@@ -2,9 +2,10 @@
 import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Badge, Card, Pagination } from 'accessible-astro-components'
-import { getBlogPosts } from '@server/content/blog-posts'
+import { getPaginatedBlogPosts } from '@server/content/blog-posts'
 
 const PAGE_SIZE = 6
+const PUBLIC_CONTENT_CACHE_TTL_MS = 30000
 const fallbackPostImages = [
   '/posts/post-image-1.png',
   '/posts/post-image-2.png',
@@ -14,21 +15,35 @@ const fallbackPostImages = [
   '/posts/post-image-6.png',
 ]
 
-const posts = await getBlogPosts()
-const postsWithImages = posts.map((post, index) => ({
-  ...post,
-  featuredImage: post.coverImageUrl || fallbackPostImages[index % fallbackPostImages.length],
-}))
-
 const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
 const parsedPage = Number.parseInt(rawPageParam, 10)
 const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
-const totalPosts = postsWithImages.length
+
+let paginatedPosts = await getPaginatedBlogPosts({
+  page: currentPage,
+  pageSize: PAGE_SIZE,
+  cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+})
+
+const initialLastPage = Math.max(1, Math.ceil(paginatedPosts.totalItems / PAGE_SIZE))
+const safePage = Math.min(currentPage, initialLastPage)
+
+if (safePage !== currentPage) {
+  paginatedPosts = await getPaginatedBlogPosts({
+    page: safePage,
+    pageSize: PAGE_SIZE,
+    cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+  })
+}
+
+const pagePosts = paginatedPosts.items.map((post, index) => ({
+  ...post,
+  featuredImage: post.coverImageUrl || fallbackPostImages[index % fallbackPostImages.length],
+}))
+const totalPosts = paginatedPosts.totalItems
 const lastPage = Math.max(1, Math.ceil(totalPosts / PAGE_SIZE))
-const safePage = Math.min(currentPage, lastPage)
 const startIndex = (safePage - 1) * PAGE_SIZE
 const endIndex = startIndex + PAGE_SIZE
-const pagePosts = postsWithImages.slice(startIndex, endIndex)
 const viewStart = totalPosts === 0 ? 0 : startIndex + 1
 const viewEnd = totalPosts === 0 ? 0 : Math.min(endIndex, totalPosts)
 const previousPageHref = safePage > 1 ? (safePage === 2 ? '/blog' : `/blog/${safePage - 1}`) : null

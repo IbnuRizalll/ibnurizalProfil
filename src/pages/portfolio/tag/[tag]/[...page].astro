@@ -3,9 +3,10 @@ import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Badge, Card, Heading, Link, Pagination } from 'accessible-astro-components'
 import { slugify } from '@utils/slugify'
-import { getProjects } from '@server/content/projects'
+import { getPaginatedProjects, getProjectTags } from '@server/content/projects'
 
 const PAGE_SIZE = 6
+const PUBLIC_CONTENT_CACHE_TTL_MS = 30000
 const fallbackProjectImages = [
   '/projects/project-image-1.png',
   '/projects/project-image-2.png',
@@ -15,17 +16,10 @@ const fallbackProjectImages = [
   '/projects/project-image-6.png',
 ]
 
-const projects = await getProjects()
-const allTags = projects.map((project) => project.tags).flat()
-const uniqueTagLabels = [...new Set(allTags)].sort((a, b) => a.localeCompare(b))
+const uniqueTagLabels = await getProjectTags({ cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS })
 const uniqueTags = uniqueTagLabels.map((label) => ({
   label,
   slug: slugify(label),
-}))
-
-const projectsWithImages = projects.map((project, index) => ({
-  ...project,
-  featuredImage: project.coverImageUrl || fallbackProjectImages[index % fallbackProjectImages.length],
 }))
 
 const currentTagSlug = slugify((Astro.params.tag || '').trim())
@@ -33,23 +27,45 @@ const currentTag =
   uniqueTags.find((tag) => tag.slug === currentTagSlug) ||
   ({ label: Astro.params.tag || 'tag', slug: currentTagSlug || 'tag' } as { label: string; slug: string })
 
-const filteredProjects = projectsWithImages.filter((project) =>
-  project.tags.map((tag) => slugify(tag)).includes(currentTag.slug),
-)
-
 const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
 const parsedPage = Number.parseInt(rawPageParam, 10)
 const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
-const totalProjects = filteredProjects.length
+
+let paginatedProjects = await getPaginatedProjects({
+  page: currentPage,
+  pageSize: PAGE_SIZE,
+  cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+  tag: currentTag.label,
+})
+
+const initialLastPage = Math.max(1, Math.ceil(paginatedProjects.totalItems / PAGE_SIZE))
+const safePage = Math.min(currentPage, initialLastPage)
+
+if (safePage !== currentPage) {
+  paginatedProjects = await getPaginatedProjects({
+    page: safePage,
+    pageSize: PAGE_SIZE,
+    cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+    tag: currentTag.label,
+  })
+}
+
+const pageProjects = paginatedProjects.items.map((project, index) => ({
+  ...project,
+  featuredImage: project.coverImageUrl || fallbackProjectImages[index % fallbackProjectImages.length],
+}))
+const totalProjects = paginatedProjects.totalItems
 const lastPage = Math.max(1, Math.ceil(totalProjects / PAGE_SIZE))
-const safePage = Math.min(currentPage, lastPage)
 const startIndex = (safePage - 1) * PAGE_SIZE
 const endIndex = startIndex + PAGE_SIZE
-const pageProjects = filteredProjects.slice(startIndex, endIndex)
 const viewStart = totalProjects === 0 ? 0 : startIndex + 1
 const viewEnd = totalProjects === 0 ? 0 : Math.min(endIndex, totalProjects)
 const previousPageHref =
-  safePage > 1 ? (safePage === 2 ? `/portfolio/tag/${currentTag.slug}` : `/portfolio/tag/${currentTag.slug}/${safePage - 1}`) : null
+  safePage > 1
+    ? safePage === 2
+      ? `/portfolio/tag/${currentTag.slug}`
+      : `/portfolio/tag/${currentTag.slug}/${safePage - 1}`
+    : null
 const nextPageHref = safePage < lastPage ? `/portfolio/tag/${currentTag.slug}/${safePage + 1}` : null
 const firstPageHref = safePage > 1 ? `/portfolio/tag/${currentTag.slug}` : null
 const lastPageHref = safePage < lastPage ? `/portfolio/tag/${currentTag.slug}/${lastPage}` : null
@@ -88,7 +104,11 @@ const lastPageHref = safePage < lastPage ? `/portfolio/tag/${currentTag.slug}/${
         }
       </div>
       <p class="mt-6 text-sm md:mt-8">
-        <em>Menampilkan proyek {viewStart} sampai {viewEnd} dari total {totalProjects} proyek dengan tag "{currentTag.label}"</em>
+        <em
+          >Menampilkan proyek {viewStart} sampai {viewEnd} dari total {totalProjects} proyek dengan tag "{
+            currentTag.label
+          }"</em
+        >
       </p>
       <ul class="portfolio-grid mt-3">
         {
@@ -104,7 +124,7 @@ const lastPageHref = safePage < lastPage ? `/portfolio/tag/${currentTag.slug}/${
               >
                 <span slot="meta">
                   {project.tags.map((tag) => {
-                    const isCurrentTag = tag === currentTag.label
+                    const isCurrentTag = slugify(tag) === currentTag.slug
                     return isCurrentTag ? <Badge class="bg-blue-600 text-white">{tag}</Badge> : <Badge>{tag}</Badge>
                   })}
                 </span>

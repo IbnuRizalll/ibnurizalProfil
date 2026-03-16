@@ -19,17 +19,13 @@ const supabaseFetchDisabledEnv =
   import.meta.env.PUBLIC_SUPABASE_FETCH_DISABLED ??
   import.meta.env.SUPABASE_FETCH_DISABLED ??
   (typeof process !== 'undefined' ? process.env.SUPABASE_FETCH_DISABLED : undefined)
-const isSupabaseFetchDisabled =
-  supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
+const isSupabaseFetchDisabled = supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
 let hasWarnedMissingSiteSettingsTable = false
 const siteSettingsCacheTtlEnv =
   import.meta.env.PUBLIC_SUPABASE_SITE_SETTINGS_CACHE_TTL_MS ??
   import.meta.env.SUPABASE_SITE_SETTINGS_CACHE_TTL_MS ??
   (typeof process !== 'undefined' ? process.env.SUPABASE_SITE_SETTINGS_CACHE_TTL_MS : undefined)
-const siteSettingsCacheTtlMs = Math.max(
-  0,
-  Number.parseInt(String(siteSettingsCacheTtlEnv ?? '10000'), 10) || 10000,
-)
+const siteSettingsCacheTtlMs = Math.max(0, Number.parseInt(String(siteSettingsCacheTtlEnv ?? '30000'), 10) || 30000)
 let cachedSiteSettings: { value: SiteSettings; expiresAt: number } | null = null
 let inFlightSiteSettingsPromise: Promise<SiteSettings> | null = null
 
@@ -74,50 +70,50 @@ export async function getSiteSettings(): Promise<SiteSettings> {
   }
 
   inFlightSiteSettingsPromise = (async () => {
-  try {
-    const endpoint = new URL('/rest/v1/site_settings', supabaseUrl)
-    endpoint.searchParams.set('select', 'id,logo_url,home_image_url,hero_description,about_me')
-    endpoint.searchParams.set('id', 'eq.main')
-    endpoint.searchParams.set('limit', '1')
+    try {
+      const endpoint = new URL('/rest/v1/site_settings', supabaseUrl)
+      endpoint.searchParams.set('select', 'id,logo_url,home_image_url,hero_description,about_me')
+      endpoint.searchParams.set('id', 'eq.main')
+      endpoint.searchParams.set('limit', '1')
 
-    const response = await fetch(endpoint.toString(), {
-      headers: {
-        apikey: supabaseAnonKey,
-        Authorization: `Bearer ${supabaseAnonKey}`,
-      },
-    })
+      const response = await fetch(endpoint.toString(), {
+        headers: {
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${supabaseAnonKey}`,
+        },
+      })
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        if (!hasWarnedMissingSiteSettingsTable) {
-          console.warn(
-            'Supabase table "site_settings" not found. Jalankan SQL terbaru di supabase/schema.sql lalu refresh.',
-          )
-          hasWarnedMissingSiteSettingsTable = true
+      if (!response.ok) {
+        if (response.status === 404) {
+          if (!hasWarnedMissingSiteSettingsTable) {
+            console.warn(
+              'Supabase table "site_settings" not found. Jalankan SQL terbaru di supabase/schema.sql lalu refresh.',
+            )
+            hasWarnedMissingSiteSettingsTable = true
+          }
+          return defaultSiteSettings
         }
+
+        console.warn(`Supabase site_settings fetch failed: ${response.status} ${response.statusText}`)
         return defaultSiteSettings
       }
 
-      console.warn(`Supabase site_settings fetch failed: ${response.status} ${response.statusText}`)
-      return defaultSiteSettings
-    }
-
-    const data = (await response.json()) as SupabaseSiteSettingsRow[]
-    const row = Array.isArray(data) && data.length > 0 ? data[0] : null
-    const normalized = normalizeSiteSettings(row)
-    if (siteSettingsCacheTtlMs > 0) {
-      cachedSiteSettings = {
-        value: normalized,
-        expiresAt: Date.now() + siteSettingsCacheTtlMs,
+      const data = (await response.json()) as SupabaseSiteSettingsRow[]
+      const row = Array.isArray(data) && data.length > 0 ? data[0] : null
+      const normalized = normalizeSiteSettings(row)
+      if (siteSettingsCacheTtlMs > 0) {
+        cachedSiteSettings = {
+          value: normalized,
+          expiresAt: Date.now() + siteSettingsCacheTtlMs,
+        }
       }
+      return normalized
+    } catch (error) {
+      console.warn('Supabase site_settings fetch error', error)
+      return defaultSiteSettings
+    } finally {
+      inFlightSiteSettingsPromise = null
     }
-    return normalized
-  } catch (error) {
-    console.warn('Supabase site_settings fetch error', error)
-    return defaultSiteSettings
-  } finally {
-    inFlightSiteSettingsPromise = null
-  }
   })()
 
   return inFlightSiteSettingsPromise

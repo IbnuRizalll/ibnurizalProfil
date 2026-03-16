@@ -2,13 +2,24 @@
 import ResponsiveToggle from './ResponsiveToggle.astro'
 import NavigationItems from './NavigationItems.astro'
 import Logo from './Logo.astro'
+import themeConfig from '@theme-config'
+import { DarkMode } from 'accessible-astro-components'
 import { LauncherTrigger } from 'accessible-astro-launcher'
+import { Icon } from 'astro-icon/components'
 
 /**
  * Navigation Component
  *
  * @description A component that displays the navigation menu for the website
  */
+type NavigationItem = (typeof themeConfig.navigation.items)[number]
+type NavigationLinkItem = Extract<NavigationItem, { href: string }>
+
+const isNavigationLinkItem = (item: NavigationItem): item is NavigationLinkItem => 'href' in item
+
+const mobileGithubItem = themeConfig.navigation.items.find(
+  (item): item is NavigationLinkItem => isNavigationLinkItem(item) && item.icon === 'lucide:github' && !!item.href,
+)
 ---
 
 <div id="main-navigation" class="py-2 md:py-4">
@@ -19,6 +30,30 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
         <NavigationItems />
       </nav>
       <div class="mobile-controls">
+        {
+          mobileGithubItem && (
+            <a
+              class="mobile-quick-action mobile-github"
+              href={mobileGithubItem.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={mobileGithubItem.label}
+            >
+              <Icon aria-hidden="true" name={mobileGithubItem.icon!} size="22" />
+              <span class="sr-only">{mobileGithubItem.label}</span>
+            </a>
+          )
+        }
+        {
+          themeConfig.navigation.darkmode && (
+            <div class="mobile-theme-toggle menu-item type-icon animate-rotate">
+              <DarkMode>
+                <Icon aria-hidden="true" name="lucide:moon" slot="light" />
+                <Icon aria-hidden="true" name="lucide:sun" slot="dark" />
+              </DarkMode>
+            </div>
+          )
+        }
         <ResponsiveToggle />
         <div class="mobile-launcher">
           <LauncherTrigger launcherId="site-launcher" iconOnly={true} gradientBorder={true} />
@@ -32,24 +67,38 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
 </div>
 
 <script>
-  document.addEventListener('astro:page-load', () => {
-    // variables
-    const mainNav = document.querySelector('#main-navigation') as HTMLElement | null
+  declare global {
+    interface Window {
+      __siteNavigationCleanup?: (() => void) | undefined
+      __siteNavigationListenerBound?: boolean | undefined
+    }
+  }
+
+  const initSiteNavigation = () => {
+    if (typeof window === 'undefined') return
+
+    if (typeof window.__siteNavigationCleanup === 'function') {
+      window.__siteNavigationCleanup()
+      window.__siteNavigationCleanup = undefined
+    }
+
+    const mainNav = document.querySelector<HTMLElement>('#main-navigation')
     if (!mainNav) return
 
-    const mainMenu = mainNav.querySelector('ul') as HTMLUListElement | null
-    const dropdownMenus = [...document.querySelectorAll('.has-dropdown button')] as HTMLButtonElement[]
+    const navLists = [...mainNav.querySelectorAll('nav > ul')] as HTMLUListElement[]
+    const dropdownMenus = [...mainNav.querySelectorAll('.has-dropdown > button')] as HTMLButtonElement[]
+    const controller = new AbortController()
+    const { signal } = controller
 
-    // functions
+    const normalizePath = (path: string): string => {
+      if (!path || path === '/') return '/'
+      return path.endsWith('/') ? path.slice(0, -1) : path
+    }
+
     const setActiveMenuItem = (): void => {
-      const mobileDesktopMenus = mainNav.querySelectorAll('nav > ul')
-      const normalizePath = (path: string): string => {
-        if (!path || path === '/') return '/'
-        return path.endsWith('/') ? path.slice(0, -1) : path
-      }
       const currentPathname = normalizePath(window.location.pathname)
 
-      mobileDesktopMenus.forEach((menu) => {
+      navLists.forEach((menu) => {
         const menuItems = [...menu.querySelectorAll('a[href]:not([rel*="external"])')] as HTMLAnchorElement[]
 
         menuItems.forEach((menuItem) => {
@@ -75,155 +124,184 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
       return elementBounds.right > (window.innerWidth || document.documentElement.clientWidth)
     }
 
+    const closeDropdownMenu = (dropdownMenu: HTMLButtonElement): void => {
+      dropdownMenu.classList.remove('show')
+      dropdownMenu.setAttribute('aria-expanded', 'false')
+      const dropdownList = dropdownMenu.parentElement?.querySelector('ul') as HTMLUListElement | null
+      if (dropdownList) {
+        dropdownList.style.left = ''
+      }
+    }
+
+    const closeAllDropdownMenus = (except?: HTMLButtonElement): void => {
+      dropdownMenus.forEach((dropdownMenu) => {
+        if (dropdownMenu !== except) {
+          closeDropdownMenu(dropdownMenu)
+        }
+      })
+    }
+
     const openDropdownMenu = (dropdownMenu: HTMLButtonElement): void => {
-      const dropdownList = dropdownMenu.parentNode?.querySelector('ul') as HTMLUListElement | null
+      const dropdownList = dropdownMenu.parentElement?.querySelector('ul') as HTMLUListElement | null
       if (!dropdownList) return
 
+      closeAllDropdownMenus(dropdownMenu)
       dropdownMenu.classList.add('show')
       dropdownMenu.setAttribute('aria-expanded', 'true')
+      dropdownList.style.left = ''
 
       if (isOutOfViewport(dropdownList)) {
         dropdownList.style.left = 'auto'
       }
     }
 
-    const closeDropdownMenu = (dropdownMenu: HTMLButtonElement): void => {
-      dropdownMenu.classList.remove('show')
-      dropdownMenu.setAttribute('aria-expanded', 'false')
+    const focusMenuTarget = (targetItem: Element | null): void => {
+      if (!targetItem) return
+      const focusableElement = targetItem.matches('a, button, input')
+        ? (targetItem as HTMLElement)
+        : ((targetItem.querySelector('a, button, input') as HTMLElement | null) ?? null)
+      focusableElement?.focus()
     }
 
-    const closeAllDropdownMenus = (): void => {
-      for (let i = 0; i < dropdownMenus.length; i++) {
-        closeDropdownMenu(dropdownMenus[i])
-      }
-    }
+    const handleMenuKeydown = (event: KeyboardEvent): void => {
+      const currentMenu = event.currentTarget as HTMLUListElement
+      const element = event.target as Element
+      const currentMenuItem = element.closest('li')
+      const menuItems = [...currentMenu.querySelectorAll(':scope > .menu-item')] as HTMLLIElement[]
+      const currentDropdownMenu = element.closest('.has-dropdown > button') as HTMLButtonElement | null
+      const currentDropdownMenuItem = element.closest('.has-dropdown li') as HTMLLIElement | null
+      const currentIndex = currentMenuItem ? menuItems.findIndex((item) => item === currentMenuItem) : -1
 
-    const toggleDropdownMenu = (event: MouseEvent): void => {
-      const target = event.target as HTMLButtonElement
-      if (target.getAttribute('aria-expanded') === 'false') {
-        closeAllDropdownMenus()
-        openDropdownMenu(target)
-      } else {
-        closeDropdownMenu(target)
-      }
-    }
+      const key = event.key
+      let targetItem: Element | null = null
 
-    // execution
-    mainMenu &&
-      mainMenu.addEventListener('keydown', (event: KeyboardEvent) => {
-        const element = event.target as Element
-        const currentMenuItem = element.closest('li')
-        const menuItems = [...mainMenu.querySelectorAll('.menu-item')] as HTMLLIElement[]
-        const currentDropdownMenu = element.closest('.has-dropdown button') as HTMLButtonElement | null
-        const currentDropdownMenuItem = element.closest('.has-dropdown li') as HTMLLIElement | null
-        const currentIndex = currentMenuItem ? menuItems.findIndex((item) => item === currentMenuItem) : -1
-
-        const key = event.key
-        let targetItem: Element | null = null
-
-        if (key === 'ArrowRight') {
-          if (currentMenuItem && menuItems.indexOf(currentMenuItem as HTMLLIElement) === menuItems.length - 1) {
-            targetItem = menuItems[0]
-          } else if (currentMenuItem) {
-            targetItem = menuItems[currentIndex + 1]
-          }
+      if (key === 'ArrowRight') {
+        if (currentMenuItem && menuItems.indexOf(currentMenuItem as HTMLLIElement) === menuItems.length - 1) {
+          targetItem = menuItems[0]
+        } else if (currentMenuItem && currentIndex >= 0) {
+          targetItem = menuItems[currentIndex + 1]
         }
+      }
 
-        if (key === 'ArrowLeft') {
-          if (currentMenuItem && menuItems.indexOf(currentMenuItem as HTMLLIElement) === 0) {
-            targetItem = menuItems[menuItems.length - 1]
-          } else if (currentMenuItem) {
-            targetItem = menuItems[currentIndex - 1]
+      if (key === 'ArrowLeft') {
+        if (currentMenuItem && menuItems.indexOf(currentMenuItem as HTMLLIElement) === 0) {
+          targetItem = menuItems[menuItems.length - 1]
+        } else if (currentMenuItem && currentIndex >= 0) {
+          targetItem = menuItems[currentIndex - 1]
+        }
+      }
+
+      if (key === 'Escape') {
+        targetItem = menuItems[0] ?? null
+      }
+
+      if (currentDropdownMenu) {
+        const nextElement = currentDropdownMenu.nextElementSibling as Element | null
+        if (nextElement) {
+          const firstDropdownItem = nextElement.querySelector('li')
+
+          if (key === 'ArrowDown') {
+            event.preventDefault()
+            openDropdownMenu(currentDropdownMenu)
+            targetItem = firstDropdownItem
           }
         }
 
         if (key === 'Escape') {
-          targetItem = menuItems[0]
+          closeDropdownMenu(currentDropdownMenu)
         }
+      }
 
-        if (currentDropdownMenu) {
-          const nextElement = currentDropdownMenu.nextElementSibling as Element | null
-          if (nextElement) {
-            const firstDropdownItem = nextElement.querySelector('li')
+      if (currentDropdownMenuItem) {
+        const currentDropdownList = currentDropdownMenuItem.parentElement
+        if (currentDropdownList) {
+          const dropdownMenuItems = [...currentDropdownList.querySelectorAll('li')] as HTMLLIElement[]
+          const dropdownIndex = dropdownMenuItems.findIndex((item) => item === currentDropdownMenuItem)
 
-            if (key === 'ArrowDown') {
-              event.preventDefault()
-              openDropdownMenu(currentDropdownMenu)
-              targetItem = firstDropdownItem
-            }
+          if (key === 'ArrowDown') {
+            event.preventDefault()
+            targetItem =
+              dropdownMenuItems.indexOf(currentDropdownMenuItem) === dropdownMenuItems.length - 1
+                ? dropdownMenuItems[0]
+                : dropdownMenuItems[dropdownIndex + 1]
+          }
+
+          if (key === 'ArrowUp') {
+            event.preventDefault()
+            targetItem =
+              dropdownMenuItems.indexOf(currentDropdownMenuItem) === 0
+                ? dropdownMenuItems[dropdownMenuItems.length - 1]
+                : dropdownMenuItems[dropdownIndex - 1]
           }
 
           if (key === 'Escape') {
-            closeDropdownMenu(currentDropdownMenu)
+            const dropdownParentButton = currentDropdownList.previousElementSibling as HTMLButtonElement | null
+            if (dropdownParentButton) {
+              targetItem = dropdownParentButton.parentElement
+              closeAllDropdownMenus()
+            }
           }
-        }
 
-        if (currentDropdownMenuItem) {
-          const currentDropdownList = currentDropdownMenuItem.parentNode as Element | null
-          if (currentDropdownList) {
-            const dropdownMenuItems = [...currentDropdownList.querySelectorAll('li')] as HTMLLIElement[]
-            const currentIndex = dropdownMenuItems.findIndex((item) => item === currentDropdownMenuItem)
-
-            if (key === 'ArrowDown') {
-              event.preventDefault()
-
-              if (dropdownMenuItems.indexOf(currentDropdownMenuItem) === dropdownMenuItems.length - 1) {
-                targetItem = dropdownMenuItems[0]
-              } else {
-                targetItem = dropdownMenuItems[currentIndex + 1]
-              }
-            }
-
-            if (key === 'ArrowUp') {
-              event.preventDefault()
-
-              if (dropdownMenuItems.indexOf(currentDropdownMenuItem) === 0) {
-                targetItem = dropdownMenuItems[dropdownMenuItems.length - 1]
-              } else {
-                targetItem = dropdownMenuItems[currentIndex - 1]
-              }
-            }
-
-            if (key === 'Escape') {
-              const currentDropdownMenu = currentDropdownList.previousElementSibling as HTMLButtonElement | null
-              if (currentDropdownMenu) {
-                targetItem = currentDropdownMenu.parentElement
-                closeAllDropdownMenus()
-              }
-            }
-
-            if (key === 'Tab') {
-              const currentDropdownMenu = currentDropdownList.previousElementSibling as HTMLButtonElement | null
-              if (currentDropdownMenu) {
-                if (dropdownMenuItems.indexOf(currentDropdownMenuItem) === dropdownMenuItems.length - 1) {
-                  closeDropdownMenu(currentDropdownMenu)
-                }
-              }
+          if (key === 'Tab') {
+            const dropdownParentButton = currentDropdownList.previousElementSibling as HTMLButtonElement | null
+            if (
+              dropdownParentButton &&
+              dropdownMenuItems.indexOf(currentDropdownMenuItem) === dropdownMenuItems.length - 1
+            ) {
+              closeDropdownMenu(dropdownParentButton)
             }
           }
         }
+      }
 
-        if (targetItem) {
-          const focusableElement = targetItem.querySelector('a, button, input') as HTMLElement | null
-          if (focusableElement) {
-            focusableElement.focus()
-          }
-        }
-      })
+      focusMenuTarget(targetItem)
+    }
 
-    dropdownMenus &&
-      dropdownMenus.forEach((dropdownMenu) => {
-        dropdownMenu.addEventListener('click', toggleDropdownMenu as EventListener)
-      })
+    const handleNavClick = (event: MouseEvent): void => {
+      const element = event.target as Element
+      const mobileLink = element.closest('.mobile-menu a[href]') as HTMLAnchorElement | null
+      if (mobileLink && mainNav.contains(mobileLink)) {
+        closeAllDropdownMenus()
+        window.dispatchEvent(new Event('site-mobile-nav:close'))
+        return
+      }
+
+      const dropdownButton = element.closest('.has-dropdown > button') as HTMLButtonElement | null
+      if (!dropdownButton || !mainNav.contains(dropdownButton)) return
+
+      if (dropdownButton.getAttribute('aria-expanded') === 'false') {
+        openDropdownMenu(dropdownButton)
+      } else {
+        closeDropdownMenu(dropdownButton)
+      }
+    }
+
+    const handleWindowClick = (event: MouseEvent): void => {
+      const element = event.target as Element | null
+      if (!element || mainNav.contains(element)) return
+      closeAllDropdownMenus()
+    }
+
+    navLists.forEach((menu) => {
+      menu.addEventListener('keydown', handleMenuKeydown, { signal })
+    })
+
+    mainNav.addEventListener('click', handleNavClick, { signal })
+    window.addEventListener('click', handleWindowClick, { signal })
 
     setActiveMenuItem()
-    window.addEventListener('click', (event: MouseEvent) => {
-      const element = event.target as Element
-      if (!element.hasAttribute('aria-haspopup') && !element.classList.contains('submenu-item')) {
-        closeAllDropdownMenus()
-      }
-    })
-  })
+
+    window.__siteNavigationCleanup = () => {
+      controller.abort()
+    }
+  }
+
+  initSiteNavigation()
+
+  if (!window.__siteNavigationListenerBound) {
+    document.addEventListener('astro:page-load', initSiteNavigation)
+    window.__siteNavigationListenerBound = true
+  }
 </script>
 
 <style lang="scss" is:global>
@@ -235,27 +313,26 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
     z-index: 1;
 
     > .container {
-      min-inline-size: 0;
-      position: relative;
-      z-index: 1;
       display: flex;
+      position: relative;
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
       gap: clamp(0.45rem, 2vw, 0.95rem);
+      z-index: 1;
       backdrop-filter: blur(12px);
       box-shadow: var(--elevation-3);
       border: 1px solid var(--border-color-subtle);
       border-radius: var(--radius-xl);
       background: color-mix(in oklab, var(--background-color) 86%, var(--color-primary-100));
       padding: clamp(0.55rem, 1.7vw, 0.9rem) clamp(0.8rem, 2vw, 1.1rem);
+      min-inline-size: 0;
 
       @include breakpoint('nav') {
         padding: var(--space-xs) var(--space-m);
       }
     }
 
-    // Mobile-first: show mobile menu by default
     .mobile-menu {
       display: none;
 
@@ -272,9 +349,59 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
     }
 
     .mobile-controls {
-      min-inline-size: 0;
       flex-wrap: wrap;
       justify-content: flex-end;
+      min-inline-size: 0;
+    }
+
+    .mobile-quick-action,
+    .mobile-theme-toggle {
+      display: flex;
+      flex: 0 0 auto;
+      justify-content: center;
+      align-items: center;
+      transition:
+        transform var(--animation-speed-fast) var(--cubic-bezier),
+        border-color var(--animation-speed-fast) var(--cubic-bezier),
+        background-color var(--animation-speed-fast) var(--cubic-bezier);
+      border: 1px solid var(--border-color-subtle);
+      border-radius: var(--radius-large);
+      background: color-mix(in oklab, var(--background-color) 92%, var(--color-primary-100));
+      min-inline-size: 2.7rem;
+      min-block-size: 2.7rem;
+    }
+
+    .mobile-quick-action {
+      text-decoration: none;
+    }
+
+    .mobile-quick-action svg,
+    .mobile-theme-toggle svg {
+      inline-size: 1.35rem;
+      block-size: 1.35rem;
+    }
+
+    .mobile-quick-action:where(:hover, :focus-visible),
+    .mobile-theme-toggle:where(:hover, :focus-within) {
+      transform: translateY(-1px);
+      border-color: color-mix(in oklab, var(--link-color) 45%, var(--border-color-subtle));
+      background: color-mix(in oklab, var(--background-color) 84%, var(--color-secondary-200));
+    }
+
+    .mobile-theme-toggle {
+      overflow: hidden;
+
+      .darkmode-toggle {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        box-shadow: none;
+        border: none;
+        background: transparent;
+        padding: 0;
+        min-inline-size: 2.7rem;
+        min-block-size: 2.7rem;
+      }
     }
 
     .mobile-launcher {
@@ -286,7 +413,6 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
       display: none;
     }
 
-    // Desktop: switch to desktop menu at nav breakpoint
     @include breakpoint('nav') {
       .mobile-menu {
         display: none;
@@ -296,6 +422,8 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
         display: none;
       }
 
+      .mobile-quick-action,
+      .mobile-theme-toggle,
       .mobile-launcher {
         display: none;
       }
@@ -307,13 +435,13 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
 
     .wrapper {
       display: flex;
-      align-items: center;
-      justify-content: flex-end;
+      flex: 0 1 auto;
       flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
       gap: clamp(0.45rem, 1.7vw, 0.8rem);
       margin-inline-start: auto;
       min-inline-size: 0;
-      flex: 0 1 auto;
 
       @include breakpoint('nav') {
         gap: var(--space-m);
@@ -328,9 +456,9 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
     nav {
       > ul {
         display: flex;
+        gap: clamp(0.65rem, 1.8vw, 1.2rem);
         margin: 0;
         padding: 0;
-        gap: clamp(0.65rem, 1.8vw, 1.2rem);
         min-inline-size: 0;
         list-style-type: none;
 
@@ -375,12 +503,12 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
 
     .mobile-menu {
       flex-basis: 100%;
-      inline-size: 100%;
       margin-block-start: clamp(0.65rem, 2vw, 1rem);
       border: 1px solid var(--border-color-subtle);
       border-radius: var(--radius-l);
       background: color-mix(in oklab, var(--background-color) 88%, var(--color-secondary-100));
       padding: clamp(0.75rem, 2.4vw, 1.1rem);
+      inline-size: 100%;
       overflow: hidden;
 
       > ul {
@@ -390,6 +518,11 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
 
         > li {
           inline-size: 100%;
+        }
+
+        > li.type-icon,
+        > li.desktop-launcher {
+          display: none;
         }
 
         ul {
@@ -543,5 +676,4 @@ import { LauncherTrigger } from 'accessible-astro-launcher'
       }
     }
   }
-
 </style>

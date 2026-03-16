@@ -62,11 +62,12 @@ interface FetchSupabaseRowsOptions {
   fetchErrorMessage: string
   orderBy?: string
   limit?: number
+  offset?: number
   filters?: FetchFilter[]
   cacheTtlMs?: number
 }
 
-type FetchFilterOperator = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'like' | 'ilike' | 'is' | 'in'
+type FetchFilterOperator = 'eq' | 'neq' | 'lt' | 'lte' | 'gt' | 'gte' | 'like' | 'ilike' | 'is' | 'in' | 'cs' | 'ov'
 
 interface FetchFilter {
   column: string
@@ -77,6 +78,12 @@ interface FetchFilter {
 interface CachedRows {
   data: unknown[]
   expiresAt: number
+  totalCount: number | null
+}
+
+export interface FetchSupabaseRowsResult<Row> {
+  rows: Row[]
+  totalCount: number | null
 }
 
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL
@@ -86,8 +93,7 @@ const supabaseFetchDisabledEnv =
   import.meta.env.PUBLIC_SUPABASE_FETCH_DISABLED ??
   import.meta.env.SUPABASE_FETCH_DISABLED ??
   (typeof process !== 'undefined' ? process.env.SUPABASE_FETCH_DISABLED : undefined)
-const isSupabaseFetchDisabled =
-  supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
+const isSupabaseFetchDisabled = supabaseFetchDisabledEnv === '1' || supabaseFetchDisabledEnv === 'true'
 const supabaseStoragePublicBase = supabaseUrl
   ? `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/public/${supabaseAssetsBucket}/`
   : ''
@@ -95,11 +101,24 @@ const supabaseCacheTtlEnv =
   import.meta.env.PUBLIC_SUPABASE_CONTENT_CACHE_TTL_MS ??
   import.meta.env.SUPABASE_CONTENT_CACHE_TTL_MS ??
   (typeof process !== 'undefined' ? process.env.SUPABASE_CONTENT_CACHE_TTL_MS : undefined)
-const defaultCacheTtlMs = Math.max(0, Number.parseInt(String(supabaseCacheTtlEnv ?? '10000'), 10) || 10000)
+const defaultCacheTtlMs = Math.max(0, Number.parseInt(String(supabaseCacheTtlEnv ?? '30000'), 10) || 30000)
 const MAX_CACHE_ENTRIES = 200
-const filterOperatorSet = new Set<FetchFilterOperator>(['eq', 'neq', 'lt', 'lte', 'gt', 'gte', 'like', 'ilike', 'is', 'in'])
+const filterOperatorSet = new Set<FetchFilterOperator>([
+  'eq',
+  'neq',
+  'lt',
+  'lte',
+  'gt',
+  'gte',
+  'like',
+  'ilike',
+  'is',
+  'in',
+  'cs',
+  'ov',
+])
 const responseCache = new Map<string, CachedRows>()
-const inFlightRequests = new Map<string, Promise<unknown[] | null>>()
+const inFlightRequests = new Map<string, Promise<CachedRows | null>>()
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey) && !isSupabaseFetchDisabled
 
@@ -138,14 +157,19 @@ function toFilterValue(operator: FetchFilterOperator, value: unknown): string {
     return `is.${String(value).toLowerCase()}`
   }
 
-  if (operator === 'in') {
+  if (operator === 'in' || operator === 'cs' || operator === 'ov') {
     const values = Array.isArray(value) ? value : [value]
     const normalized = values
       .map((entry) => String(entry).trim())
       .filter((entry) => entry.length > 0)
       .map((entry) => `"${entry.replace(/"/g, '\\"')}"`)
       .join(',')
-    return `in.(${normalized})`
+
+    if (operator === 'in') {
+      return `in.(${normalized})`
+    }
+
+    return `${operator}.{${normalized}}`
   }
 
   return `${operator}.${String(value)}`
@@ -165,6 +189,19 @@ function applyFilters(endpoint: URL, filters: FetchFilter[] | undefined): void {
 
     endpoint.searchParams.set(column, toFilterValue(operator, filter.value))
   }
+}
+
+function parseTotalCount(value: string | null): number | null {
+  if (!value) return null
+
+  const slashIndex = value.lastIndexOf('/')
+  if (slashIndex < 0) return null
+
+  const rawCount = value.slice(slashIndex + 1).trim()
+  if (!rawCount || rawCount === '*') return null
+
+  const parsed = Number.parseInt(rawCount, 10)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function normalizeTags(tags: string[] | string | null | undefined): string[] {
@@ -315,11 +352,12 @@ export function normalizeSupabaseContentEntity(
   }
 }
 
-export async function fetchSupabaseRows<Row>(
+async function fetchSupabaseRowsInternal<Row>(
   options: FetchSupabaseRowsOptions,
-): Promise<Row[]> {
+  includeCount: boolean,
+): Promise<FetchSupabaseRowsResult<Row>> {
   if (isSupabaseFetchDisabled || !isSupabaseConfigured || !supabaseUrl || !supabaseAnonKey) {
-    return []
+    return { rows: [], totalCount: 0 }
   }
 
   try {
@@ -328,38 +366,54 @@ export async function fetchSupabaseRows<Row>(
     const effectiveOrder = asString(options.orderBy) || 'created_at.desc'
     const rawLimit = Number.parseInt(String(options.limit ?? ''), 10)
     const effectiveLimit = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, 1000) : null
+    const rawOffset = Number.parseInt(String(options.offset ?? ''), 10)
+    const effectiveOffset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : null
     const cacheTtlMs = Math.max(0, options.cacheTtlMs ?? defaultCacheTtlMs)
 
-    const fetchRows = async (selectClause: string): Promise<Row[] | null> => {
+    const fetchRows = async (selectClause: string): Promise<FetchSupabaseRowsResult<Row> | null> => {
       const endpoint = new URL(`/rest/v1/${options.table}`, baseUrl)
       endpoint.searchParams.set('select', selectClause)
       endpoint.searchParams.set('order', effectiveOrder)
       if (effectiveLimit) {
         endpoint.searchParams.set('limit', String(effectiveLimit))
       }
+      if (effectiveOffset !== null) {
+        endpoint.searchParams.set('offset', String(effectiveOffset))
+      }
       applyFilters(endpoint, options.filters)
 
-      const requestKey = endpoint.toString()
+      const requestUrl = endpoint.toString()
+      const requestKey = `${requestUrl}|count=${includeCount ? 'exact' : 'none'}`
       const now = Date.now()
 
       if (cacheTtlMs > 0) {
         pruneExpiredCache(now)
         const cached = responseCache.get(requestKey)
         if (cached && cached.expiresAt > now) {
-          return cached.data as Row[]
+          return {
+            rows: cached.data as Row[],
+            totalCount: cached.totalCount,
+          }
         }
       }
 
       const inFlight = inFlightRequests.get(requestKey)
       if (inFlight) {
-        return (await inFlight) as Row[] | null
+        const cached = await inFlight
+        return cached
+          ? {
+              rows: cached.data as Row[],
+              totalCount: cached.totalCount,
+            }
+          : null
       }
 
-      const requestPromise = (async (): Promise<Row[] | null> => {
-        const response = await fetch(requestKey, {
+      const requestPromise = (async (): Promise<CachedRows | null> => {
+        const response = await fetch(requestUrl, {
           headers: {
             apikey: anonKey,
             Authorization: `Bearer ${anonKey}`,
+            ...(includeCount ? { Prefer: 'count=exact' } : {}),
           },
         })
 
@@ -369,20 +423,28 @@ export async function fetchSupabaseRows<Row>(
 
         const data = (await response.json()) as Row[]
         const normalized = Array.isArray(data) ? data : []
-
-        if (cacheTtlMs > 0) {
-          responseCache.set(requestKey, {
-            data: normalized,
-            expiresAt: Date.now() + cacheTtlMs,
-          })
+        const cachedRows: CachedRows = {
+          data: normalized,
+          expiresAt: Date.now() + cacheTtlMs,
+          totalCount: includeCount ? parseTotalCount(response.headers.get('content-range')) : null,
         }
 
-        return normalized
+        if (cacheTtlMs > 0) {
+          responseCache.set(requestKey, cachedRows)
+        }
+
+        return cachedRows
       })()
 
-      inFlightRequests.set(requestKey, requestPromise as Promise<unknown[] | null>)
+      inFlightRequests.set(requestKey, requestPromise)
       try {
-        return await requestPromise
+        const cached = await requestPromise
+        return cached
+          ? {
+              rows: cached.data as Row[],
+              totalCount: cached.totalCount,
+            }
+          : null
       } finally {
         inFlightRequests.delete(requestKey)
       }
@@ -399,9 +461,20 @@ export async function fetchSupabaseRows<Row>(
     }
 
     console.warn(options.fetchFailureMessage)
-    return []
+    return { rows: [], totalCount: 0 }
   } catch (error) {
     console.warn(options.fetchErrorMessage, error)
-    return []
+    return { rows: [], totalCount: 0 }
   }
+}
+
+export async function fetchSupabaseRows<Row>(options: FetchSupabaseRowsOptions): Promise<Row[]> {
+  const result = await fetchSupabaseRowsInternal<Row>(options, false)
+  return result.rows
+}
+
+export async function fetchSupabaseRowsWithCount<Row>(
+  options: FetchSupabaseRowsOptions,
+): Promise<FetchSupabaseRowsResult<Row>> {
+  return fetchSupabaseRowsInternal<Row>(options, true)
 }

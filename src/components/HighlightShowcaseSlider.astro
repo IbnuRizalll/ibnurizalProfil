@@ -148,6 +148,12 @@ const sliderId = `highlight-slider-${sliderSlug}`
 </section>
 
 <script>
+  declare global {
+    interface Window {
+      __highlightSliderBootstrapped?: boolean | undefined
+    }
+  }
+
   const setupHighlightSliders = () => {
     const sliders = [...document.querySelectorAll('[data-highlight-slider]')].filter(
       (slider) => slider instanceof HTMLElement && slider.dataset.sliderReady !== 'true',
@@ -172,7 +178,7 @@ const sliderId = `highlight-slider-${sliderSlug}`
       let touchStartY = 0
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-      const updateSlider = (nextIndex, shouldFocusTrigger = false) => {
+      const updateSlider = (nextIndex: number, shouldFocusTrigger = false) => {
         activeIndex = (nextIndex + total) % total
         slider.dataset.activeIndex = String(activeIndex)
 

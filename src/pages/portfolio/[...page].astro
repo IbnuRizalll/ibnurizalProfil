@@ -3,9 +3,10 @@ import DefaultLayout from '@layouts/DefaultLayout.astro'
 import PageHeader from '@components/PageHeader.astro'
 import { Badge, Card, Heading, Link, Pagination } from 'accessible-astro-components'
 import { slugify } from '@utils/slugify'
-import { getProjects } from '@server/content/projects'
+import { getPaginatedProjects, getProjectTags } from '@server/content/projects'
 
 const PAGE_SIZE = 6
+const PUBLIC_CONTENT_CACHE_TTL_MS = 30000
 const fallbackProjectImages = [
   '/projects/project-image-1.png',
   '/projects/project-image-2.png',
@@ -15,28 +16,41 @@ const fallbackProjectImages = [
   '/projects/project-image-6.png',
 ]
 
-const projects = await getProjects()
-const allTags = projects.map((project) => project.tags).flat()
-const uniqueTagLabels = [...new Set(allTags)].sort((a, b) => a.localeCompare(b))
+const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
+const parsedPage = Number.parseInt(rawPageParam, 10)
+const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
+
+const uniqueTagLabels = await getProjectTags({ cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS })
 const uniqueTags = uniqueTagLabels.map((label) => ({
   label,
   slug: slugify(label),
 }))
 
-const projectsWithImages = projects.map((project, index) => ({
+let paginatedProjects = await getPaginatedProjects({
+  page: currentPage,
+  pageSize: PAGE_SIZE,
+  cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+})
+
+const initialLastPage = Math.max(1, Math.ceil(paginatedProjects.totalItems / PAGE_SIZE))
+const safePage = Math.min(currentPage, initialLastPage)
+
+if (safePage !== currentPage) {
+  paginatedProjects = await getPaginatedProjects({
+    page: safePage,
+    pageSize: PAGE_SIZE,
+    cacheTtlMs: PUBLIC_CONTENT_CACHE_TTL_MS,
+  })
+}
+
+const pageProjects = paginatedProjects.items.map((project, index) => ({
   ...project,
   featuredImage: project.coverImageUrl || fallbackProjectImages[index % fallbackProjectImages.length],
 }))
-
-const rawPageParam = (Astro.params.page || '').split('/').filter(Boolean)[0] || '1'
-const parsedPage = Number.parseInt(rawPageParam, 10)
-const currentPage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1
-const totalProjects = projectsWithImages.length
+const totalProjects = paginatedProjects.totalItems
 const lastPage = Math.max(1, Math.ceil(totalProjects / PAGE_SIZE))
-const safePage = Math.min(currentPage, lastPage)
 const startIndex = (safePage - 1) * PAGE_SIZE
 const endIndex = startIndex + PAGE_SIZE
-const pageProjects = projectsWithImages.slice(startIndex, endIndex)
 const viewStart = totalProjects === 0 ? 0 : startIndex + 1
 const viewEnd = totalProjects === 0 ? 0 : Math.min(endIndex, totalProjects)
 const previousPageHref = safePage > 1 ? (safePage === 2 ? '/portfolio' : `/portfolio/${safePage - 1}`) : null

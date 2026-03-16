@@ -1,6 +1,3 @@
 ---
-const target = '/admin/about'
-const hasAdminAccess = Astro.cookies.get('admin_access')?.value === '1'
-
-return Astro.redirect(hasAdminAccess ? target : `/login?next=${encodeURIComponent(target)}`, 302)
+return Astro.redirect('/admin/about', 302)
 ---
