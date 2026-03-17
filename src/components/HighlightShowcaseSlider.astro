@@ -69,98 +69,96 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
 
     {
       items.length > 0 ? (
-        <>
-          <div id={sliderId} class="showcase-shell" data-highlight-slider>
-            <div class="showcase-stage" data-slider-stage tabindex="0" aria-label={`${title} highlight slider`}>
-              {items.map((item, index) => (
-                <article
-                  class:list={['showcase-panel', { 'is-active': index === 0 }]}
-                  data-slider-panel
-                  data-index={index}
-                  aria-hidden={index === 0 ? 'false' : 'true'}
-                >
-                  <a class="showcase-panel-link" href={item.url}>
-                    <figure class="showcase-media">
-                      <img
-                        src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
-                        data-src={index === 0 ? undefined : item.image}
-                        data-slider-panel-image
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        fetchpriority="low"
-                      />
-                    </figure>
+        <div id={sliderId} class="showcase-shell" data-highlight-slider>
+          <div class="showcase-stage" data-slider-stage tabindex="0" aria-label={`${title} highlight slider`}>
+            {items.map((item, index) => (
+              <article
+                class:list={['showcase-panel', { 'is-active': index === 0 }]}
+                data-slider-panel
+                data-index={index}
+                aria-hidden={index === 0 ? 'false' : 'true'}
+              >
+                <a class="showcase-panel-link" href={item.url}>
+                  <figure class="showcase-media">
+                    <img
+                      src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
+                      data-src={index === 0 ? undefined : item.image}
+                      data-slider-panel-image
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
+                    />
+                  </figure>
 
-                    <div class="showcase-content">
-                      <div class="showcase-meta-row">
-                        <span class="showcase-index">{String(index + 1).padStart(2, '0')}</span>
-                        <span class="showcase-footer">{item.footer}</span>
-                      </div>
-
-                      {item.tags && item.tags.length > 0 && (
-                        <ul class="showcase-tags" aria-label="Tag konten">
-                          {item.tags.map((tag) => (
-                            <li>{tag}</li>
-                          ))}
-                        </ul>
-                      )}
-
-                      <h3>{item.title}</h3>
-                      <p>{item.description}</p>
-
-                      <span class="showcase-link-label">
-                        Lihat detail
-                        <Icon aria-hidden="true" name="lucide:arrow-up-right" size="1rem" />
-                      </span>
+                  <div class="showcase-content">
+                    <div class="showcase-meta-row">
+                      <span class="showcase-index">{String(index + 1).padStart(2, '0')}</span>
+                      <span class="showcase-footer">{item.footer}</span>
                     </div>
-                  </a>
-                </article>
+
+                    {item.tags && item.tags.length > 0 && (
+                      <ul class="showcase-tags" aria-label="Tag konten">
+                        {item.tags.map((tag) => (
+                          <li>{tag}</li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <h3>{item.title}</h3>
+                    <p>{item.description}</p>
+
+                    <span class="showcase-link-label">
+                      Lihat detail
+                      <Icon aria-hidden="true" name="lucide:arrow-up-right" size="1rem" />
+                    </span>
+                  </div>
+                </a>
+              </article>
+            ))}
+          </div>
+
+          {items.length > 1 && (
+            <div class="showcase-rail" data-slider-rail aria-label={`Preview ${title}`}>
+              {items.map((item, index) => (
+                <button
+                  type="button"
+                  class:list={['showcase-preview', { 'is-active': index === 0 }]}
+                  data-slider-trigger
+                  data-index={index}
+                  aria-pressed={index === 0 ? 'true' : 'false'}
+                >
+                  <span class="showcase-preview-image">
+                    <img
+                      src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
+                      data-src={index === 0 ? undefined : item.image}
+                      data-slider-preview-image
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      fetchpriority="low"
+                    />
+                  </span>
+                  <span class="showcase-preview-copy">
+                    <span class="showcase-preview-title">{item.title}</span>
+                    <span class="showcase-preview-footer">{item.footer}</span>
+                  </span>
+                </button>
               ))}
             </div>
-
-            {items.length > 1 && (
-              <div class="showcase-rail" data-slider-rail aria-label={`Preview ${title}`}>
-                {items.map((item, index) => (
-                  <button
-                    type="button"
-                    class:list={['showcase-preview', { 'is-active': index === 0 }]}
-                    data-slider-trigger
-                    data-index={index}
-                    aria-pressed={index === 0 ? 'true' : 'false'}
-                  >
-                    <span class="showcase-preview-image">
-                      <img
-                        src={index === 0 ? item.image : IMAGE_PLACEHOLDER_SRC}
-                        data-src={index === 0 ? undefined : item.image}
-                        data-slider-preview-image
-                        alt=""
-                        loading="lazy"
-                        decoding="async"
-                        fetchpriority="low"
-                      />
-                    </span>
-                    <span class="showcase-preview-copy">
-                      <span class="showcase-preview-title">{item.title}</span>
-                      <span class="showcase-preview-footer">{item.footer}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div class="mt-12">
-            <Link href={linkHref} isButton animateOnHover animationType="nudge">
-              {linkLabel}
-              <Icon aria-hidden="true" name="lucide:arrow-right" size="1.5rem" />
-            </Link>
-          </div>
-        </>
+          )}
+        </div>
       ) : (
         <p>{emptyMessage}</p>
       )
     }
+
+    <div class:list={['showcase-cta', items.length > 0 ? 'mt-12' : 'mt-6']}>
+      <Link href={linkHref} isButton animateOnHover animationType="nudge">
+        {linkLabel}
+        <Icon aria-hidden="true" name="lucide:arrow-right" size="1.5rem" />
+      </Link>
+    </div>
   </div>
 </section>
 
