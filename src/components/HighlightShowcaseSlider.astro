@@ -262,7 +262,31 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
         loadAdjacentPanels(activeIndex)
       }
 
-      const updateSlider = (nextIndex: number, shouldFocusTrigger = false) => {
+      const scrollTriggerIntoRailView = (trigger: HTMLElement) => {
+        if (!(rail instanceof HTMLElement)) return
+
+        const isHorizontal = rail.scrollWidth > rail.clientWidth + 4
+        const behavior = prefersReducedMotion ? 'auto' : 'smooth'
+
+        if (isHorizontal) {
+          const nextLeft = Math.max(0, trigger.offsetLeft - (rail.clientWidth - trigger.clientWidth) / 2)
+          rail.scrollTo({ left: nextLeft, behavior })
+          return
+        }
+
+        const nextTop = Math.max(0, trigger.offsetTop - (rail.clientHeight - trigger.clientHeight) / 2)
+        rail.scrollTo({ top: nextTop, behavior })
+      }
+
+      const focusTriggerWithoutScroll = (trigger: HTMLElement) => {
+        try {
+          trigger.focus({ preventScroll: true })
+        } catch {
+          trigger.focus()
+        }
+      }
+
+      const updateSlider = (nextIndex: number, shouldFocusTrigger = false, shouldScrollTrigger = false) => {
         activeIndex = (nextIndex + total) % total
         slider.dataset.activeIndex = String(activeIndex)
         loadAdjacentPanels(activeIndex)
@@ -282,14 +306,12 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
           trigger.tabIndex = isActive ? 0 : -1
 
           if (isActive) {
-            trigger.scrollIntoView({
-              behavior: prefersReducedMotion ? 'auto' : 'smooth',
-              block: 'nearest',
-              inline: 'center',
-            })
+            if (shouldScrollTrigger) {
+              scrollTriggerIntoRailView(trigger)
+            }
 
             if (shouldFocusTrigger) {
-              trigger.focus()
+              focusTriggerWithoutScroll(trigger)
             }
           }
         })
@@ -300,34 +322,34 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
       }
 
       triggers.forEach((trigger, index) => {
-        trigger.addEventListener('click', () => updateSlider(index))
+        trigger.addEventListener('click', () => updateSlider(index, false, true))
         trigger.addEventListener('keydown', (event) => {
           if (!(event instanceof KeyboardEvent)) return
           if (event.key === 'ArrowRight') {
             event.preventDefault()
-            updateSlider(activeIndex + 1, true)
+            updateSlider(activeIndex + 1, true, true)
           }
           if (event.key === 'ArrowLeft') {
             event.preventDefault()
-            updateSlider(activeIndex - 1, true)
+            updateSlider(activeIndex - 1, true, true)
           }
           if (event.key === 'Home') {
             event.preventDefault()
-            updateSlider(0, true)
+            updateSlider(0, true, true)
           }
           if (event.key === 'End') {
             event.preventDefault()
-            updateSlider(total - 1, true)
+            updateSlider(total - 1, true, true)
           }
         })
       })
 
       if (prevButton instanceof HTMLElement) {
-        prevButton.addEventListener('click', () => updateSlider(activeIndex - 1, true))
+        prevButton.addEventListener('click', () => updateSlider(activeIndex - 1, false, true))
       }
 
       if (nextButton instanceof HTMLElement) {
-        nextButton.addEventListener('click', () => updateSlider(activeIndex + 1, true))
+        nextButton.addEventListener('click', () => updateSlider(activeIndex + 1, false, true))
       }
 
       if (stage instanceof HTMLElement) {
@@ -335,11 +357,11 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
           if (!(event instanceof KeyboardEvent)) return
           if (event.key === 'ArrowRight') {
             event.preventDefault()
-            updateSlider(activeIndex + 1)
+            updateSlider(activeIndex + 1, false, true)
           }
           if (event.key === 'ArrowLeft') {
             event.preventDefault()
-            updateSlider(activeIndex - 1)
+            updateSlider(activeIndex - 1, false, true)
           }
         })
 
@@ -364,7 +386,7 @@ const IMAGE_PLACEHOLDER_SRC = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yw
             const deltaY = firstTouch.clientY - touchStartY
 
             if (Math.abs(deltaX) < 48 || Math.abs(deltaX) <= Math.abs(deltaY)) return
-            updateSlider(activeIndex + (deltaX < 0 ? 1 : -1))
+            updateSlider(activeIndex + (deltaX < 0 ? 1 : -1), false, true)
           },
           { passive: true },
         )
