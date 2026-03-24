@@ -349,7 +349,8 @@ const mobileGithubItem = themeConfig.navigation.items.find(
     }
 
     .mobile-controls {
-      flex-wrap: wrap;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
       justify-content: flex-end;
       min-inline-size: 0;
     }
@@ -436,7 +437,7 @@ const mobileGithubItem = themeConfig.navigation.items.find(
     .wrapper {
       display: flex;
       flex: 0 1 auto;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: flex-end;
       align-items: center;
       gap: clamp(0.45rem, 1.7vw, 0.8rem);
@@ -634,11 +635,14 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     @media (max-width: 480px) {
       > .container {
+        gap: 0.55rem;
         border-radius: 16px;
+        padding-inline: 0.72rem;
+        padding-block: 0.7rem;
       }
 
       .wrapper {
-        gap: 0.38rem;
+        gap: 0.35rem;
       }
 
       nav > ul > li > a,
@@ -653,22 +657,30 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     @media (max-width: 560px) {
       > .container {
-        align-items: flex-start;
+        flex-wrap: nowrap;
+        align-items: center;
       }
 
       .wrapper {
-        flex: 1 1 100%;
-        margin-inline-start: 0;
+        flex: 0 1 auto;
+        margin-inline-start: auto;
       }
 
       .mobile-controls {
-        inline-size: 100%;
+        gap: 0.35rem;
+        inline-size: auto;
+      }
+
+      .mobile-quick-action,
+      .mobile-theme-toggle {
+        min-inline-size: 2.5rem;
+        min-block-size: 2.5rem;
       }
     }
 
     @media (max-width: 400px) {
       .mobile-controls {
-        justify-content: space-between;
+        justify-content: flex-end;
       }
 
       .mobile-menu {

@@ -92,44 +92,72 @@ const { class: className } = Astro.props
   @use '../assets/scss/base/breakpoint' as *;
 
   .responsive-toggle {
-    display: none;
+    display: flex;
     justify-content: center;
     align-items: center;
-    border: none;
-    background: transparent;
-    padding: 0;
+    gap: 0.42rem;
+    transition:
+      transform var(--animation-speed-fast) var(--cubic-bezier),
+      border-color var(--animation-speed-fast) var(--cubic-bezier),
+      background-color var(--animation-speed-fast) var(--cubic-bezier);
+    border: 1px solid var(--border-color-subtle);
+    border-radius: var(--radius-large);
+    background: color-mix(in oklab, var(--background-color) 92%, var(--color-primary-100));
+    padding: 0.7rem 0.8rem;
     min-inline-size: fit-content;
+    min-block-size: 2.7rem;
+    font-weight: 700;
+    font-size: 0.95rem;
+    line-height: 1;
     white-space: nowrap;
 
     span {
-      margin-inline-end: var(--space-3xs);
+      margin-inline-end: 0;
     }
 
     svg {
-      width: 30px;
+      inline-size: 1.35rem;
+      block-size: 1.35rem;
 
       path {
-        transition: fill var(--animation-speed-fast) var(--cubic-bezier);
+        transition: stroke var(--animation-speed-fast) var(--cubic-bezier);
       }
     }
 
     &:where(:hover, :focus-visible) {
-      span {
-        text-decoration: underline;
-        text-decoration-style: wavy;
-        text-decoration-thickness: 1px;
-        text-underline-offset: 7px;
-      }
+      transform: translateY(-1px);
+      border-color: color-mix(in oklab, var(--link-color) 45%, var(--border-color-subtle));
+      background: color-mix(in oklab, var(--background-color) 84%, var(--color-secondary-200));
+    }
+
+    &:focus-visible {
+      outline: 2px solid color-mix(in oklab, var(--link-color) 48%, transparent);
+      outline-offset: 2px;
     }
   }
 
   @media (max-width: 420px) {
     .responsive-toggle {
-      font-size: 0.95rem;
+      gap: 0.35rem;
+      padding-inline: 0.72rem;
+      min-block-size: 2.5rem;
+      font-size: 0.9rem;
     }
 
     .responsive-toggle svg {
-      width: 28px;
+      inline-size: 1.25rem;
+      block-size: 1.25rem;
+    }
+  }
+
+  @media (max-width: 360px) {
+    .responsive-toggle {
+      padding-inline: 0.78rem;
+      min-inline-size: 2.5rem;
+    }
+
+    .responsive-toggle span {
+      display: none;
     }
   }
 </style>

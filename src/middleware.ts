@@ -15,7 +15,7 @@ const DEFAULT_SECURITY_HEADERS: Record<string, string> = {
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Resource-Policy': 'same-origin',
   'Content-Security-Policy':
-    "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; frame-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data:; script-src 'self' 'unsafe-inline' https://esm.sh; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co https://esm.sh",
+    "default-src 'self'; base-uri 'self'; frame-ancestors 'none'; object-src 'none'; form-action 'self'; frame-src 'none'; img-src 'self' data: blob: https:; font-src 'self' data:; script-src 'self' 'unsafe-inline' data: https://esm.sh; script-src-elem 'self' data: https://esm.sh; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.supabase.co https://esm.sh",
 }
 
 function setHeaderIfMissing(response: Response, key: string, value: string): void {
