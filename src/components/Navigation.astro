@@ -56,7 +56,7 @@ const mobileGithubItem = themeConfig.navigation.items.find(
         }
         <ResponsiveToggle />
         <div class="mobile-launcher">
-          <LauncherTrigger launcherId="site-launcher" iconOnly={true} gradientBorder={true} />
+          <LauncherTrigger launcherId="site-launcher" iconOnly={true} class="mobile-launcher-trigger" />
         </div>
       </div>
     </div>
@@ -385,8 +385,15 @@ const mobileGithubItem = themeConfig.navigation.items.find(
     .mobile-quick-action:where(:hover, :focus-visible),
     .mobile-theme-toggle:where(:hover, :focus-within) {
       transform: translateY(-1px);
+      box-shadow: var(--elevation-2);
       border-color: color-mix(in oklab, var(--link-color) 45%, var(--border-color-subtle));
       background: color-mix(in oklab, var(--background-color) 84%, var(--color-secondary-200));
+    }
+
+    .mobile-quick-action:active,
+    .mobile-theme-toggle:has(.darkmode-toggle:active) {
+      transform: translateY(0) scale(0.97);
+      box-shadow: none;
     }
 
     .mobile-theme-toggle {
@@ -408,6 +415,36 @@ const mobileGithubItem = themeConfig.navigation.items.find(
     .mobile-launcher {
       display: flex;
       flex: 0 0 auto;
+
+      .launcher-trigger,
+      .launcher-trigger .trigger {
+        min-inline-size: 2.7rem;
+        min-block-size: 2.7rem;
+      }
+
+      .launcher-trigger .trigger {
+        transition:
+          transform var(--animation-speed-fast) var(--cubic-bezier),
+          border-color var(--animation-speed-fast) var(--cubic-bezier),
+          background-color var(--animation-speed-fast) var(--cubic-bezier),
+          box-shadow var(--animation-speed-fast) var(--cubic-bezier);
+        box-shadow: 0 0 0 0 transparent;
+        border: 1px solid var(--border-color-subtle);
+        border-radius: var(--radius-large);
+      }
+
+      .launcher-trigger .trigger:hover,
+      .launcher-trigger .trigger:focus-visible {
+        transform: translateY(-1px);
+        animation: none;
+        box-shadow: var(--elevation-2);
+        border-color: color-mix(in oklab, var(--link-color) 45%, var(--border-color-subtle));
+      }
+
+      .launcher-trigger .trigger:active {
+        transform: translateY(0) scale(0.97);
+        box-shadow: none;
+      }
     }
 
     .desktop-menu {
