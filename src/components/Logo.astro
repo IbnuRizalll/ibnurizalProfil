@@ -13,8 +13,10 @@ const logoText = 'IRM'
 <style lang="scss" is:global>
   .logo-link {
     display: inline-flex;
+    flex: 0 1 auto;
     align-items: center;
     gap: clamp(0.45rem, 1.2vw, 0.65rem);
+    min-inline-size: 0;
     color: var(--foreground-color);
     line-height: 1;
     text-decoration: none;
@@ -27,8 +29,9 @@ const logoText = 'IRM'
     border: 1px solid color-mix(in oklab, var(--border-color-subtle) 82%, transparent);
     border-radius: 0.78rem;
     background: color-mix(in oklab, var(--background-color) 88%, var(--color-primary-100));
-    padding: 0.45rem 0.72rem;
-    font-size: clamp(1rem, 0.95rem + 0.24vw, 1.15rem);
+    padding: clamp(0.4rem, 1.4vw, 0.45rem) clamp(0.62rem, 2vw, 0.72rem);
+    min-block-size: var(--mobile-nav-control-size, auto);
+    font-size: clamp(0.98rem, 0.92rem + 0.24vw, 1.15rem);
     font-weight: 800;
     letter-spacing: 0.14em;
   }
@@ -47,6 +50,15 @@ const logoText = 'IRM'
   @media (max-width: 880px) {
     .logo-link .logo-meta {
       display: none;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .logo-link .logo-badge {
+      border-radius: 0.9rem;
+      padding-inline: clamp(0.48rem, 2.8vw, 0.62rem);
+      font-size: clamp(0.9rem, 5.2vw, 1rem);
+      letter-spacing: 0.12em;
     }
   }
 </style>

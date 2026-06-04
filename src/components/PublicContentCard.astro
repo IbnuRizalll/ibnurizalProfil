@@ -11,6 +11,7 @@ interface Props {
   headingSize?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
   footer?: string
   fullHeight?: boolean
+  compact?: boolean
   imageLoading?: 'lazy' | 'eager'
   fetchpriority?: 'high' | 'low' | 'auto'
   width?: number
@@ -27,6 +28,7 @@ const {
   headingSize = 'h6',
   footer = '',
   fullHeight = false,
+  compact = false,
   imageLoading = 'lazy',
   fetchpriority = 'low',
   width = 640,
@@ -34,7 +36,13 @@ const {
 } = Astro.props
 ---
 
-<article class:list={['public-content-card', { 'public-content-card--full-height': fullHeight }, className]}>
+<article
+  class:list={[
+    'public-content-card',
+    { 'public-content-card--full-height': fullHeight, 'public-content-card--compact': compact },
+    className,
+  ]}
+>
   <div class="public-content-card__image">
     <img
       src={img}
@@ -93,6 +101,10 @@ const {
     block-size: 100%;
   }
 
+  :where(.public-content-card--compact) {
+    max-inline-size: none;
+  }
+
   :where(.public-content-card:hover),
   :where(.public-content-card:focus-within) {
     box-shadow:
@@ -116,6 +128,10 @@ const {
     padding: clamp(0.85rem, 1.6vw, 1rem);
     block-size: 250px;
     overflow: clip;
+  }
+
+  :where(.public-content-card--compact .public-content-card__image) {
+    block-size: clamp(11.5rem, 18vw, 14rem);
   }
 
   :where(.public-content-card__image img) {
@@ -161,6 +177,13 @@ const {
     content: '';
   }
 
+  :where(.public-content-card--compact .public-content-card__title) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+
   :where(.public-content-card__meta) {
     order: -1;
     margin-block-start: 0.5rem;
@@ -182,10 +205,24 @@ const {
     overflow-wrap: anywhere;
   }
 
+  :where(.public-content-card--compact .public-content-card__description) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+  }
+
   :where(.public-content-card__footer) {
     margin-block-start: auto;
     color: color-mix(in oklab, var(--text-color) 72%, transparent);
     font-size: 0.86rem;
     line-height: 1.35;
+  }
+
+  :where(.public-content-card--compact .public-content-card__footer) {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
   }
 </style>

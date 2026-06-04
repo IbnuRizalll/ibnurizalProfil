@@ -106,8 +106,10 @@ const { class: className } = Astro.props
     border-radius: var(--radius-large);
     background: color-mix(in oklab, var(--background-color) 92%, var(--color-primary-100));
     padding: 0;
-    min-inline-size: 2.7rem;
-    min-block-size: 2.7rem;
+    inline-size: var(--mobile-nav-control-size, 2.7rem);
+    block-size: var(--mobile-nav-control-size, 2.7rem);
+    min-inline-size: var(--mobile-nav-control-size, 2.7rem);
+    min-block-size: var(--mobile-nav-control-size, 2.7rem);
     line-height: 1;
 
     span {
@@ -115,8 +117,8 @@ const { class: className } = Astro.props
     }
 
     svg {
-      inline-size: 1.35rem;
-      block-size: 1.35rem;
+      inline-size: var(--mobile-nav-control-icon-size, 1.35rem);
+      block-size: var(--mobile-nav-control-icon-size, 1.35rem);
 
       path {
         transition: stroke var(--animation-speed-fast) var(--cubic-bezier);
@@ -138,18 +140,6 @@ const { class: className } = Astro.props
     &:focus-visible {
       outline: 2px solid color-mix(in oklab, var(--link-color) 48%, transparent);
       outline-offset: 2px;
-    }
-  }
-
-  @media (max-width: 420px) {
-    .responsive-toggle {
-      min-inline-size: 2.5rem;
-      min-block-size: 2.5rem;
-    }
-
-    .responsive-toggle svg {
-      inline-size: 1.25rem;
-      block-size: 1.25rem;
     }
   }
 </style>

@@ -309,6 +309,10 @@ const mobileGithubItem = themeConfig.navigation.items.find(
   @use '../assets/scss/base/breakpoint' as *;
 
   #main-navigation {
+    --mobile-nav-control-size: clamp(2.45rem, 10.8vw, 2.85rem);
+    --mobile-nav-control-icon-size: clamp(1.25rem, 5.2vw, 1.45rem);
+    --mobile-nav-gap: clamp(0.3rem, 1.7vw, 0.55rem);
+
     position: relative;
     z-index: 1;
 
@@ -318,14 +322,14 @@ const mobileGithubItem = themeConfig.navigation.items.find(
       flex-wrap: wrap;
       justify-content: space-between;
       align-items: center;
-      gap: clamp(0.45rem, 2vw, 0.95rem);
+      gap: var(--mobile-nav-gap);
       z-index: 1;
       backdrop-filter: blur(12px);
       box-shadow: var(--elevation-3);
       border: 1px solid var(--border-color-subtle);
       border-radius: var(--radius-xl);
       background: color-mix(in oklab, var(--background-color) 86%, var(--color-primary-100));
-      padding: clamp(0.55rem, 1.7vw, 0.9rem) clamp(0.8rem, 2vw, 1.1rem);
+      padding: clamp(0.55rem, 1.7vw, 0.9rem) clamp(0.65rem, 2vw, 1.1rem);
       min-inline-size: 0;
 
       @include breakpoint('nav') {
@@ -345,7 +349,7 @@ const mobileGithubItem = themeConfig.navigation.items.find(
     .responsive-toggle {
       display: flex;
       align-items: center;
-      gap: var(--space-2xs);
+      gap: var(--mobile-nav-gap);
     }
 
     .mobile-controls {
@@ -368,8 +372,25 @@ const mobileGithubItem = themeConfig.navigation.items.find(
       border: 1px solid var(--border-color-subtle);
       border-radius: var(--radius-large);
       background: color-mix(in oklab, var(--background-color) 92%, var(--color-primary-100));
-      min-inline-size: 2.7rem;
-      min-block-size: 2.7rem;
+      inline-size: var(--mobile-nav-control-size);
+      block-size: var(--mobile-nav-control-size);
+      min-inline-size: var(--mobile-nav-control-size);
+      min-block-size: var(--mobile-nav-control-size);
+      padding: 0;
+      line-height: 1;
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .mobile-quick-action,
+      .mobile-theme-toggle,
+      .mobile-quick-action svg,
+      .mobile-theme-toggle svg {
+        transition:
+          transform 220ms var(--cubic-bezier),
+          border-color 220ms var(--cubic-bezier),
+          background-color 220ms var(--cubic-bezier),
+          box-shadow 220ms var(--cubic-bezier);
+      }
     }
 
     .mobile-quick-action {
@@ -378,8 +399,8 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     .mobile-quick-action svg,
     .mobile-theme-toggle svg {
-      inline-size: 1.35rem;
-      block-size: 1.35rem;
+      inline-size: var(--mobile-nav-control-icon-size);
+      block-size: var(--mobile-nav-control-icon-size);
     }
 
     .mobile-quick-action:where(:hover, :focus-visible),
@@ -390,10 +411,40 @@ const mobileGithubItem = themeConfig.navigation.items.find(
       background: color-mix(in oklab, var(--background-color) 84%, var(--color-secondary-200));
     }
 
+    .mobile-quick-action:where(:hover, :focus-visible) svg,
+    .mobile-theme-toggle:where(:hover, :focus-within) svg {
+      transform: rotate(-8deg) scale(1.08);
+    }
+
     .mobile-quick-action:active,
     .mobile-theme-toggle:has(.darkmode-toggle:active) {
       transform: translateY(0) scale(0.97);
       box-shadow: none;
+    }
+
+    .mobile-quick-action:active svg,
+    .mobile-theme-toggle:has(.darkmode-toggle:active) svg {
+      transform: rotate(8deg) scale(0.96);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mobile-quick-action,
+      .mobile-theme-toggle,
+      .mobile-quick-action svg,
+      .mobile-theme-toggle svg {
+        transition: none;
+      }
+
+      .mobile-quick-action:where(:hover, :focus-visible),
+      .mobile-theme-toggle:where(:hover, :focus-within),
+      .mobile-quick-action:where(:hover, :focus-visible) svg,
+      .mobile-theme-toggle:where(:hover, :focus-within) svg,
+      .mobile-quick-action:active,
+      .mobile-theme-toggle:has(.darkmode-toggle:active),
+      .mobile-quick-action:active svg,
+      .mobile-theme-toggle:has(.darkmode-toggle:active) svg {
+        transform: none;
+      }
     }
 
     .mobile-theme-toggle {
@@ -407,8 +458,11 @@ const mobileGithubItem = themeConfig.navigation.items.find(
         border: none;
         background: transparent;
         padding: 0;
-        min-inline-size: 2.7rem;
-        min-block-size: 2.7rem;
+        inline-size: var(--mobile-nav-control-size);
+        block-size: var(--mobile-nav-control-size);
+        min-inline-size: var(--mobile-nav-control-size);
+        min-block-size: var(--mobile-nav-control-size);
+        line-height: 1;
       }
     }
 
@@ -418,11 +472,21 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
       .launcher-trigger,
       .launcher-trigger .trigger {
-        min-inline-size: 2.7rem;
-        min-block-size: 2.7rem;
+        inline-size: var(--mobile-nav-control-size);
+        block-size: var(--mobile-nav-control-size);
+        min-inline-size: var(--mobile-nav-control-size);
+        min-block-size: var(--mobile-nav-control-size);
+      }
+
+      .launcher-trigger {
+        --launcher-trigger-icon-only-size: var(--mobile-nav-control-size);
+        display: flex;
       }
 
       .launcher-trigger .trigger {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
         transition:
           transform var(--animation-speed-fast) var(--cubic-bezier),
           border-color var(--animation-speed-fast) var(--cubic-bezier),
@@ -431,6 +495,24 @@ const mobileGithubItem = themeConfig.navigation.items.find(
         box-shadow: 0 0 0 0 transparent;
         border: 1px solid var(--border-color-subtle);
         border-radius: var(--radius-large);
+        padding: 0;
+        line-height: 1;
+      }
+
+      .launcher-trigger .wrapper {
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        inline-size: 100%;
+        block-size: 100%;
+        line-height: 0;
+      }
+
+      .launcher-trigger svg {
+        inline-size: calc(var(--mobile-nav-control-icon-size) * 0.94);
+        block-size: calc(var(--mobile-nav-control-icon-size) * 0.94);
+        translate: 0.02rem -0.01rem;
+        stroke-width: 2.15;
       }
 
       .launcher-trigger .trigger:hover,
@@ -541,18 +623,19 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     .mobile-menu {
       flex-basis: 100%;
-      margin-block-start: clamp(0.65rem, 2vw, 1rem);
+      order: 3;
+      margin-block-start: clamp(0.55rem, 2vw, 0.85rem);
       border: 1px solid var(--border-color-subtle);
-      border-radius: var(--radius-l);
-      background: color-mix(in oklab, var(--background-color) 88%, var(--color-secondary-100));
-      padding: clamp(0.75rem, 2.4vw, 1.1rem);
+      border-radius: clamp(1rem, 4vw, var(--radius-l));
+      background: color-mix(in oklab, var(--background-color) 92%, var(--color-secondary-100));
+      padding: clamp(0.5rem, 2.2vw, 0.75rem);
       inline-size: 100%;
       overflow: hidden;
 
       > ul {
         flex-direction: column;
-        align-items: flex-start;
-        gap: var(--space-s);
+        align-items: stretch;
+        gap: 0.25rem;
 
         > li {
           inline-size: 100%;
@@ -571,10 +654,28 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
       a,
       button {
-        display: block;
-        padding: var(--space-2xs) 0;
+        display: flex;
+        align-items: center;
+        border-radius: 0.85rem;
+        padding: 0.78rem 0.9rem;
         inline-size: 100%;
+        min-block-size: 2.75rem;
+        font-size: clamp(1rem, 0.94rem + 0.35vw, 1.12rem);
+        font-weight: 650;
+        line-height: 1.25;
+        text-decoration: none;
         text-wrap: balance;
+      }
+
+      a:where(:hover, :focus-visible),
+      button:where(:hover, :focus-visible),
+      .is-active {
+        background: color-mix(in oklab, var(--background-color) 82%, var(--color-secondary-200));
+        text-decoration: none;
+      }
+
+      .is-active {
+        box-shadow: inset 3px 0 0 color-mix(in oklab, var(--link-color) 72%, var(--foreground-color));
       }
     }
 
@@ -649,11 +750,12 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     .darkmode-toggle {
       border: none;
+      box-shadow: none;
       padding: 0;
 
       .icon {
-        inline-size: clamp(24px, 5.5vw, 30px);
-        block-size: clamp(24px, 5.5vw, 30px);
+        inline-size: var(--mobile-nav-control-icon-size);
+        block-size: var(--mobile-nav-control-icon-size);
       }
 
       &:where(:hover, :focus-visible) {
@@ -672,14 +774,14 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     @media (max-width: 480px) {
       > .container {
-        gap: 0.55rem;
+        gap: var(--mobile-nav-gap);
         border-radius: 16px;
-        padding-inline: 0.72rem;
-        padding-block: 0.7rem;
+        padding-inline: clamp(0.5rem, 2.7vw, 0.72rem);
+        padding-block: clamp(0.55rem, 2.6vw, 0.7rem);
       }
 
       .wrapper {
-        gap: 0.35rem;
+        gap: var(--mobile-nav-gap);
       }
 
       nav > ul > li > a,
@@ -694,7 +796,7 @@ const mobileGithubItem = themeConfig.navigation.items.find(
 
     @media (max-width: 560px) {
       > .container {
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         align-items: center;
       }
 
@@ -704,24 +806,27 @@ const mobileGithubItem = themeConfig.navigation.items.find(
       }
 
       .mobile-controls {
-        gap: 0.35rem;
+        gap: var(--mobile-nav-gap);
         inline-size: auto;
-      }
-
-      .mobile-quick-action,
-      .mobile-theme-toggle {
-        min-inline-size: 2.5rem;
-        min-block-size: 2.5rem;
       }
     }
 
     @media (max-width: 400px) {
+      --mobile-nav-control-size: clamp(2.35rem, 11.4vw, 2.55rem);
+      --mobile-nav-control-icon-size: clamp(1.15rem, 5.8vw, 1.3rem);
+      --mobile-nav-gap: clamp(0.24rem, 1.45vw, 0.38rem);
+
       .mobile-controls {
         justify-content: flex-end;
       }
 
       .mobile-menu {
-        padding-inline: 0.8rem;
+        padding-inline: 0.45rem;
+
+        a,
+        button {
+          padding-inline: 0.72rem;
+        }
       }
     }
   }

@@ -92,6 +92,7 @@ const lastPageHref = safePage < lastPage ? `/portfolio/${lastPage}` : null
                 headingLevel="h2"
                 footer={'Peran: ' + project.author}
                 fullHeight={true}
+                compact={true}
               >
                 <span slot="meta">
                   {project.tags.map((tag) => (
@@ -126,7 +127,8 @@ const lastPageHref = safePage < lastPage ? `/portfolio/${lastPage}` : null
 <style lang="scss" is:global>
   .portfolio-list .portfolio-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+    align-items: stretch;
+    grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
     gap: clamp(1rem, 2.2vw, 1.45rem);
   }
 

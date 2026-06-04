@@ -107,14 +107,89 @@ import { HighContrast, ReducedMotion, SkipLink } from 'accessible-astro-componen
         translate: 0 4px;
       }
 
+      > a,
       button {
-        border: none;
-        border-radius: 0;
+        display: inline-flex;
+        justify-content: center;
+        align-items: center;
+        transition:
+          transform 220ms var(--cubic-bezier),
+          border-color 220ms var(--cubic-bezier),
+          background-color 220ms var(--cubic-bezier),
+          box-shadow 220ms var(--cubic-bezier);
+        box-shadow: 0 0 0 0 transparent;
+        border: 1px solid transparent;
+        border-radius: var(--radius-large);
+        background: transparent;
+        padding: 0.38rem;
+        min-inline-size: 2.55rem;
+        min-block-size: 2.55rem;
+        text-decoration: none;
       }
 
       svg {
         inline-size: clamp(24px, 2.2vw, 30px);
         block-size: clamp(24px, 2.2vw, 30px);
+      }
+
+      > a svg,
+      button svg {
+        transition: transform 220ms var(--cubic-bezier);
+      }
+
+      > a:where(:hover, :focus-visible),
+      &:focus-within button,
+      button:where(:hover, :focus-visible) {
+        transform: translateY(-1px);
+        box-shadow: var(--elevation-2);
+        border-color: color-mix(in oklab, var(--link-color) 45%, var(--border-color-subtle));
+        background: color-mix(in oklab, var(--background-color) 84%, var(--color-secondary-200));
+        text-decoration: none;
+      }
+
+      > a:where(:hover, :focus-visible) svg,
+      &:focus-within button svg,
+      button:where(:hover, :focus-visible) svg {
+        transform: rotate(-8deg) scale(1.08);
+      }
+
+      > a:active,
+      button:active {
+        transform: translateY(0) scale(0.97);
+        box-shadow: none;
+      }
+
+      > a:active svg,
+      button:active svg {
+        transform: rotate(8deg) scale(0.96);
+      }
+    }
+
+    :is(li.type-icon, .mobile-theme-toggle).animate-rotate:where(:hover, :focus-visible, :focus-within) {
+      animation: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      li.type-icon {
+        > a,
+        button,
+        > a svg,
+        button svg {
+          transition: none;
+        }
+
+        > a:where(:hover, :focus-visible),
+        &:focus-within button,
+        button:where(:hover, :focus-visible),
+        > a:where(:hover, :focus-visible) svg,
+        &:focus-within button svg,
+        button:where(:hover, :focus-visible) svg,
+        > a:active,
+        button:active,
+        > a:active svg,
+        button:active svg {
+          transform: none;
+        }
       }
     }
 
