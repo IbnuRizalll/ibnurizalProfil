@@ -1,0 +1,572 @@
+<script type="module" is:inline>
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4'
+
+  const body = document.body
+  const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
+  const STORAGE_KEY = 'productivity-dashboard:v1'
+  const DEFAULT_FOCUS_MINUTES = 25
+
+  const statusEl = document.getElementById('status')
+  const appSection = document.getElementById('app-section')
+  const logoutButton = document.getElementById('logout-button')
+  const exportButton = document.getElementById('export-button')
+  const importButton = document.getElementById('import-button')
+  const importInput = document.getElementById('import-input')
+  const taskForm = document.getElementById('task-form')
+  const scheduleForm = document.getElementById('schedule-form')
+  const taskList = document.getElementById('task-list')
+  const scheduleList = document.getElementById('schedule-list')
+  const clearDoneButton = document.getElementById('clear-done-button')
+  const quickNote = document.getElementById('quick-note')
+  const notesSavedAt = document.getElementById('notes-saved-at')
+  const focusTaskInput = document.getElementById('focus-task')
+  const focusMinutesSelect = document.getElementById('focus-minutes')
+  const focusTime = document.getElementById('focus-time')
+  const focusStartButton = document.getElementById('focus-start-button')
+  const focusPauseButton = document.getElementById('focus-pause-button')
+  const focusResetButton = document.getElementById('focus-reset-button')
+  const metricOpenTasks = document.getElementById('metric-open-tasks')
+  const metricDueToday = document.getElementById('metric-due-today')
+  const metricEventsToday = document.getElementById('metric-events-today')
+  const metricFocusMinutes = document.getElementById('metric-focus-minutes')
+  const taskFilterButtons = [...document.querySelectorAll('[data-task-filter]')]
+
+  const taskFields = {
+    title: document.getElementById('task-title'),
+    category: document.getElementById('task-category'),
+    priority: document.getElementById('task-priority'),
+    dueDate: document.getElementById('task-due-date'),
+    estimate: document.getElementById('task-estimate'),
+  }
+
+  const eventFields = {
+    title: document.getElementById('event-title'),
+    date: document.getElementById('event-date'),
+    time: document.getElementById('event-time'),
+    category: document.getElementById('event-category'),
+  }
+
+  let supabase
+  let state = createEmptyState()
+  let activeTaskFilter = 'open'
+  let noteSaveTimer = 0
+  let focusTimer = 0
+  let focusRemainingSeconds = DEFAULT_FOCUS_MINUTES * 60
+  let focusIsRunning = false
+  let focusStartedAt = 0
+
+  function createEmptyState() {
+    return {
+      tasks: [],
+      events: [],
+      notes: '',
+      focus: {
+        totalSeconds: 0,
+        sessions: [],
+      },
+      updatedAt: '',
+    }
+  }
+
+  function setAdminAccessCookie(isActive) {
+    const rawValue = Number.parseInt(body.dataset.adminIdleTimeoutMinutes || '', 10)
+    const minutes = Number.isFinite(rawValue) ? Math.min(30, Math.max(15, rawValue)) : 20
+    const secure = window.location.protocol === 'https:' ? '; Secure' : ''
+    const maxAge = isActive ? `; Max-Age=${minutes * 60}` : '; Max-Age=0'
+    document.cookie = `${ADMIN_ACCESS_COOKIE_NAME}=${isActive ? '1' : ''}; Path=/; SameSite=Strict${maxAge}${secure}`
+  }
+
+  function redirectToLogin() {
+    setAdminAccessCookie(false)
+    window.location.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`)
+  }
+
+  function setStatus(message, type = 'info') {
+    statusEl.textContent = message
+    statusEl.className = `status ${type}`
+  }
+
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  function formatDateLabel(value) {
+    if (!value) return 'No deadline'
+    const date = new Date(`${value}T00:00:00`)
+    if (Number.isNaN(date.getTime())) return value
+    return new Intl.DateTimeFormat('id-ID', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }).format(date)
+  }
+
+  function formatTime(seconds) {
+    const safeSeconds = Math.max(0, seconds)
+    const minutes = Math.floor(safeSeconds / 60)
+    const remainder = safeSeconds % 60
+    return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+  }
+
+  function priorityRank(priority) {
+    if (priority === 'high') return 0
+    if (priority === 'medium') return 1
+    return 2
+  }
+
+  function normalizeState(input) {
+    const nextState = createEmptyState()
+    if (!input || typeof input !== 'object') return nextState
+
+    nextState.tasks = Array.isArray(input.tasks)
+      ? input.tasks
+          .map((task) => ({
+            id: String(task.id || crypto.randomUUID()),
+            title: String(task.title || '').trim(),
+            category: String(task.category || '').trim(),
+            priority: ['high', 'medium', 'low'].includes(task.priority) ? task.priority : 'medium',
+            dueDate: String(task.dueDate || '').slice(0, 10),
+            estimate: Number.isFinite(Number(task.estimate)) ? Math.max(0, Number(task.estimate)) : 0,
+            done: Boolean(task.done),
+            createdAt: String(task.createdAt || new Date().toISOString()),
+            completedAt: task.completedAt ? String(task.completedAt) : '',
+          }))
+          .filter((task) => task.title)
+      : []
+
+    nextState.events = Array.isArray(input.events)
+      ? input.events
+          .map((event) => ({
+            id: String(event.id || crypto.randomUUID()),
+            title: String(event.title || '').trim(),
+            date: String(event.date || '').slice(0, 10),
+            time: String(event.time || '').slice(0, 5),
+            category: String(event.category || '').trim(),
+            createdAt: String(event.createdAt || new Date().toISOString()),
+          }))
+          .filter((event) => event.title && event.date)
+      : []
+
+    nextState.notes = typeof input.notes === 'string' ? input.notes : ''
+    nextState.focus = {
+      totalSeconds: Number.isFinite(Number(input.focus?.totalSeconds)) ? Math.max(0, Number(input.focus.totalSeconds)) : 0,
+      sessions: Array.isArray(input.focus?.sessions) ? input.focus.sessions.slice(-30) : [],
+    }
+    nextState.updatedAt = String(input.updatedAt || '')
+    return nextState
+  }
+
+  function loadState() {
+    try {
+      const rawValue = window.localStorage.getItem(STORAGE_KEY)
+      state = normalizeState(rawValue ? JSON.parse(rawValue) : null)
+    } catch {
+      state = createEmptyState()
+      setStatus('Local dashboard data could not be read. Starting with a clean workspace.', 'info')
+    }
+  }
+
+  function saveState(message = '') {
+    state.updatedAt = new Date().toISOString()
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+    if (message) setStatus(message, 'success')
+    render()
+  }
+
+  function renderMetrics() {
+    const today = todayKey()
+    const openTasks = state.tasks.filter((task) => !task.done)
+    metricOpenTasks.textContent = String(openTasks.length)
+    metricDueToday.textContent = String(openTasks.filter((task) => task.dueDate === today).length)
+    metricEventsToday.textContent = String(state.events.filter((event) => event.date === today).length)
+    metricFocusMinutes.textContent = String(Math.floor((state.focus.totalSeconds || 0) / 60))
+  }
+
+  function renderTasks() {
+    taskList.innerHTML = ''
+
+    taskFilterButtons.forEach((button) => {
+      const isActive = button.dataset.taskFilter === activeTaskFilter
+      button.classList.toggle('primary', isActive)
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+    })
+
+    const filteredTasks = state.tasks
+      .filter((task) => {
+        if (activeTaskFilter === 'done') return task.done
+        if (activeTaskFilter === 'open') return !task.done
+        return true
+      })
+      .sort((first, second) => {
+        if (first.done !== second.done) return first.done ? 1 : -1
+        const priorityDiff = priorityRank(first.priority) - priorityRank(second.priority)
+        if (priorityDiff !== 0) return priorityDiff
+        return String(first.dueDate || '9999-12-31').localeCompare(String(second.dueDate || '9999-12-31'))
+      })
+
+    if (!filteredTasks.length) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state'
+      emptyItem.textContent = activeTaskFilter === 'done' ? 'Belum ada task selesai.' : 'Belum ada task. Tambahkan satu hal kecil dulu.'
+      taskList.appendChild(emptyItem)
+      return
+    }
+
+    for (const task of filteredTasks) {
+      const item = document.createElement('li')
+      item.className = `item ${task.done ? 'is-done' : ''}`
+
+      const main = document.createElement('div')
+      main.className = 'item-main'
+
+      const title = document.createElement('div')
+      title.className = 'item-title'
+      title.textContent = task.title
+
+      const meta = document.createElement('div')
+      meta.className = 'item-meta'
+      meta.append(
+        createPill(task.priority, `priority-${task.priority}`),
+        createPill(formatDateLabel(task.dueDate)),
+        createPill(task.category || 'General'),
+      )
+      if (task.estimate) meta.append(createPill(`${task.estimate} min`))
+
+      const actions = document.createElement('div')
+      actions.className = 'item-actions'
+
+      const doneButton = document.createElement('button')
+      doneButton.className = 'button small'
+      doneButton.type = 'button'
+      doneButton.textContent = task.done ? 'Reopen' : 'Done'
+      doneButton.addEventListener('click', () => {
+        task.done = !task.done
+        task.completedAt = task.done ? new Date().toISOString() : ''
+        saveState(task.done ? 'Task marked done.' : 'Task reopened.')
+      })
+
+      const focusButton = document.createElement('button')
+      focusButton.className = 'button small'
+      focusButton.type = 'button'
+      focusButton.textContent = 'Focus'
+      focusButton.addEventListener('click', () => {
+        focusTaskInput.value = task.title
+        setStatus('Task moved to focus mode.', 'info')
+      })
+
+      const deleteButton = document.createElement('button')
+      deleteButton.className = 'button small danger'
+      deleteButton.type = 'button'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', () => {
+        state.tasks = state.tasks.filter((itemTask) => itemTask.id !== task.id)
+        saveState('Task deleted.')
+      })
+
+      main.append(title, meta)
+      actions.append(doneButton, focusButton, deleteButton)
+      item.append(main, actions)
+      taskList.appendChild(item)
+    }
+  }
+
+  function createPill(text, extraClass = '') {
+    const pill = document.createElement('span')
+    pill.className = `pill ${extraClass}`.trim()
+    pill.textContent = text
+    return pill
+  }
+
+  function renderSchedule() {
+    scheduleList.innerHTML = ''
+    const sortedEvents = [...state.events].sort((first, second) => {
+      const firstValue = `${first.date} ${first.time || '99:99'}`
+      const secondValue = `${second.date} ${second.time || '99:99'}`
+      return firstValue.localeCompare(secondValue)
+    })
+
+    if (!sortedEvents.length) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state'
+      emptyItem.textContent = 'Belum ada jadwal. Tambahkan agenda penting berikutnya.'
+      scheduleList.appendChild(emptyItem)
+      return
+    }
+
+    for (const event of sortedEvents.slice(0, 12)) {
+      const item = document.createElement('li')
+      item.className = 'item'
+
+      const main = document.createElement('div')
+      main.className = 'item-main'
+
+      const title = document.createElement('div')
+      title.className = 'item-title'
+      title.textContent = event.title
+
+      const meta = document.createElement('div')
+      meta.className = 'item-meta'
+      meta.append(createPill(formatDateLabel(event.date)), createPill(event.time || 'No time'), createPill(event.category || 'General'))
+
+      const actions = document.createElement('div')
+      actions.className = 'item-actions'
+
+      const deleteButton = document.createElement('button')
+      deleteButton.className = 'button small danger'
+      deleteButton.type = 'button'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', () => {
+        state.events = state.events.filter((itemEvent) => itemEvent.id !== event.id)
+        saveState('Schedule deleted.')
+      })
+
+      main.append(title, meta)
+      actions.append(deleteButton)
+      item.append(main, actions)
+      scheduleList.appendChild(item)
+    }
+  }
+
+  function renderNotesMeta() {
+    if (!state.updatedAt) {
+      notesSavedAt.textContent = 'Not saved yet'
+      return
+    }
+
+    notesSavedAt.textContent = `Saved ${new Intl.DateTimeFormat('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: 'short',
+    }).format(new Date(state.updatedAt))}`
+  }
+
+  function renderFocus() {
+    focusTime.textContent = formatTime(focusRemainingSeconds)
+    focusStartButton.disabled = focusIsRunning
+    focusPauseButton.disabled = !focusIsRunning
+  }
+
+  function render() {
+    renderMetrics()
+    renderTasks()
+    renderSchedule()
+    renderNotesMeta()
+    renderFocus()
+  }
+
+  function handleTaskSubmit(event) {
+    event.preventDefault()
+    const title = taskFields.title.value.trim()
+    if (!title) return
+
+    state.tasks.push({
+      id: crypto.randomUUID(),
+      title,
+      category: taskFields.category.value.trim(),
+      priority: taskFields.priority.value,
+      dueDate: taskFields.dueDate.value,
+      estimate: Number.parseInt(taskFields.estimate.value || '0', 10) || 0,
+      done: false,
+      createdAt: new Date().toISOString(),
+      completedAt: '',
+    })
+
+    taskForm.reset()
+    taskFields.priority.value = 'medium'
+    saveState('Task added.')
+  }
+
+  function handleScheduleSubmit(event) {
+    event.preventDefault()
+    const title = eventFields.title.value.trim()
+    const date = eventFields.date.value
+    if (!title || !date) return
+
+    state.events.push({
+      id: crypto.randomUUID(),
+      title,
+      date,
+      time: eventFields.time.value,
+      category: eventFields.category.value.trim(),
+      createdAt: new Date().toISOString(),
+    })
+
+    scheduleForm.reset()
+    eventFields.date.value = todayKey()
+    saveState('Schedule added.')
+  }
+
+  function saveNotesSoon() {
+    window.clearTimeout(noteSaveTimer)
+    noteSaveTimer = window.setTimeout(() => {
+      state.notes = quickNote.value
+      saveState('Notes saved.')
+    }, 500)
+  }
+
+  function resetFocusTimer() {
+    focusIsRunning = false
+    window.clearInterval(focusTimer)
+    focusRemainingSeconds = (Number.parseInt(focusMinutesSelect.value || String(DEFAULT_FOCUS_MINUTES), 10) || DEFAULT_FOCUS_MINUTES) * 60
+    focusStartedAt = 0
+    renderFocus()
+  }
+
+  function completeFocusSession() {
+    focusIsRunning = false
+    window.clearInterval(focusTimer)
+    const plannedSeconds = (Number.parseInt(focusMinutesSelect.value || String(DEFAULT_FOCUS_MINUTES), 10) || DEFAULT_FOCUS_MINUTES) * 60
+    state.focus.totalSeconds += plannedSeconds
+    state.focus.sessions.push({
+      id: crypto.randomUUID(),
+      task: focusTaskInput.value.trim(),
+      seconds: plannedSeconds,
+      completedAt: new Date().toISOString(),
+    })
+    state.focus.sessions = state.focus.sessions.slice(-30)
+    saveState('Focus session completed.')
+    resetFocusTimer()
+  }
+
+  function startFocusTimer() {
+    if (focusIsRunning) return
+    focusIsRunning = true
+    focusStartedAt = Date.now()
+    focusTimer = window.setInterval(() => {
+      focusRemainingSeconds -= 1
+      if (focusRemainingSeconds <= 0) {
+        completeFocusSession()
+        return
+      }
+      renderFocus()
+    }, 1000)
+    renderFocus()
+    setStatus('Focus session started.', 'info')
+  }
+
+  function pauseFocusTimer() {
+    if (!focusIsRunning) return
+    focusIsRunning = false
+    window.clearInterval(focusTimer)
+    const elapsedSeconds = Math.max(0, Math.round((Date.now() - focusStartedAt) / 1000))
+    setStatus(`Focus paused after ${Math.floor(elapsedSeconds / 60)} minutes.`, 'info')
+    renderFocus()
+  }
+
+  function exportData() {
+    const payload = JSON.stringify(state, null, 2)
+    const blob = new Blob([payload], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `productivity-dashboard-${todayKey()}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    setStatus('Dashboard data exported.', 'success')
+  }
+
+  async function importData(file) {
+    if (!file) return
+    try {
+      const text = await file.text()
+      const importedState = normalizeState(JSON.parse(text))
+      state = importedState
+      quickNote.value = state.notes
+      saveState('Dashboard data imported.')
+    } catch {
+      setStatus('Import failed. Please choose a valid dashboard JSON file.', 'error')
+    } finally {
+      importInput.value = ''
+    }
+  }
+
+  function wireEvents() {
+    taskForm.addEventListener('submit', handleTaskSubmit)
+    scheduleForm.addEventListener('submit', handleScheduleSubmit)
+    quickNote.addEventListener('input', saveNotesSoon)
+    clearDoneButton.addEventListener('click', () => {
+      state.tasks = state.tasks.filter((task) => !task.done)
+      saveState('Completed tasks cleared.')
+    })
+
+    taskFilterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        activeTaskFilter = button.dataset.taskFilter || 'open'
+        renderTasks()
+      })
+    })
+
+    focusMinutesSelect.addEventListener('change', resetFocusTimer)
+    focusStartButton.addEventListener('click', startFocusTimer)
+    focusPauseButton.addEventListener('click', pauseFocusTimer)
+    focusResetButton.addEventListener('click', () => {
+      resetFocusTimer()
+      setStatus('Focus timer reset.', 'info')
+    })
+
+    exportButton.addEventListener('click', exportData)
+    importButton.addEventListener('click', () => importInput.click())
+    importInput.addEventListener('change', () => {
+      void importData(importInput.files?.[0])
+    })
+  }
+
+  async function initialize() {
+    const url = body.dataset.supabaseUrl || ''
+    const key = body.dataset.supabaseAnonKey || ''
+
+    if (!url || !key) {
+      setStatus('Missing PUBLIC_SUPABASE_URL or PUBLIC_SUPABASE_ANON_KEY in environment.', 'error')
+      return
+    }
+
+    supabase = createClient(url, key)
+
+    logoutButton.addEventListener('click', async () => {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        setStatus(error.message, 'error')
+        return
+      }
+      redirectToLogin()
+    })
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session) {
+      redirectToLogin()
+      return
+    }
+
+    setAdminAccessCookie(true)
+    body.removeAttribute('data-admin-auth-pending')
+    appSection.hidden = false
+    setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
+
+    loadState()
+    quickNote.value = state.notes
+    eventFields.date.value = todayKey()
+    resetFocusTimer()
+    wireEvents()
+    render()
+
+    supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === 'SIGNED_OUT') {
+        redirectToLogin()
+        return
+      }
+      if (nextSession?.access_token) {
+        setAdminAccessCookie(true)
+        body.removeAttribute('data-admin-auth-pending')
+        appSection.hidden = false
+      }
+    })
+  }
+
+  initialize()
+</script>
