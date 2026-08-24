@@ -1,4 +1,7 @@
 ---
+import { DarkMode } from 'accessible-astro-components'
+import { Icon } from 'astro-icon/components'
+
 type AdminSectionKey = 'dashboard' | 'about' | 'portfolio' | 'blog' | 'messages' | 'storage'
 
 interface Props {
@@ -29,6 +32,10 @@ const sections: Array<{ key: AdminSectionKey; href: string; label: string }> = [
       </a>
     ))
   }
+  <DarkMode class="admin-theme-toggle" label="Ganti mode terang atau gelap">
+    <Icon aria-hidden="true" name="lucide:moon" size="20" slot="light" />
+    <Icon aria-hidden="true" name="lucide:sun" size="20" slot="dark" />
+  </DarkMode>
 </nav>
 
 <style is:global>
@@ -37,15 +44,24 @@ const sections: Array<{ key: AdminSectionKey; href: string; label: string }> = [
   }
 
   .admin-section-nav .nav-link {
+    justify-content: center;
     min-inline-size: 0;
     max-inline-size: 100%;
-    justify-content: center;
     text-align: center;
     overflow-wrap: anywhere;
   }
 
+  .admin-section-nav .admin-theme-toggle {
+    flex: 0 0 auto;
+    align-self: center;
+  }
+
   @media (max-width: 720px) {
     .admin-section-nav .nav-link {
+      flex: 1 1 100%;
+    }
+
+    .admin-section-nav .admin-theme-toggle {
       flex: 1 1 100%;
     }
   }
