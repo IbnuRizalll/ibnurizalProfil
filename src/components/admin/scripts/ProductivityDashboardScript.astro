@@ -14,13 +14,25 @@
   const importInput = document.getElementById('import-input')
   const taskForm = document.getElementById('task-form')
   const scheduleForm = document.getElementById('schedule-form')
+  const noteForm = document.getElementById('note-form')
   const taskList = document.getElementById('task-list')
   const scheduleList = document.getElementById('schedule-list')
+  const noteList = document.getElementById('note-list')
   const clearDoneButton = document.getElementById('clear-done-button')
+  const clearNoteButton = document.getElementById('clear-note-button')
+  const noteTitle = document.getElementById('note-title')
   const quickNote = document.getElementById('quick-note')
   const notesSavedAt = document.getElementById('notes-saved-at')
+  const calendarGrid = document.getElementById('calendar-grid')
+  const calendarWeekdays = document.getElementById('calendar-weekdays')
+  const calendarMonthLabel = document.getElementById('calendar-month-label')
+  const calendarPrevButton = document.getElementById('calendar-prev-button')
+  const calendarNextButton = document.getElementById('calendar-next-button')
+  const calendarTodayButton = document.getElementById('calendar-today-button')
+  const selectedTaskDate = document.getElementById('selected-task-date')
+  const selectedScheduleDate = document.getElementById('selected-schedule-date')
   const focusTaskInput = document.getElementById('focus-task')
-  const focusMinutesSelect = document.getElementById('focus-minutes')
+  const focusMinutesInput = document.getElementById('focus-minutes')
   const focusTime = document.getElementById('focus-time')
   const focusStartButton = document.getElementById('focus-start-button')
   const focusPauseButton = document.getElementById('focus-pause-button')
@@ -48,8 +60,9 @@
 
   let supabase
   let state = createEmptyState()
+  let selectedDate = todayKey()
+  let calendarViewDate = new Date(`${todayKey()}T00:00:00`)
   let activeTaskFilter = 'open'
-  let noteSaveTimer = 0
   let focusTimer = 0
   let focusRemainingSeconds = DEFAULT_FOCUS_MINUTES * 60
   let focusIsRunning = false
@@ -59,7 +72,11 @@
     return {
       tasks: [],
       events: [],
-      notes: '',
+      noteDraft: {
+        title: '',
+        body: '',
+      },
+      notes: [],
       focus: {
         totalSeconds: 0,
         sessions: [],
@@ -87,17 +104,37 @@
   }
 
   function todayKey() {
-    return new Date().toISOString().slice(0, 10)
+    return dateKey(new Date())
+  }
+
+  function dateKey(date) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+
+  function parseDate(value) {
+    const date = new Date(`${value}T00:00:00`)
+    return Number.isNaN(date.getTime()) ? null : date
   }
 
   function formatDateLabel(value) {
-    if (!value) return 'No deadline'
-    const date = new Date(`${value}T00:00:00`)
-    if (Number.isNaN(date.getTime())) return value
+    if (!value) return 'No date'
+    const date = parseDate(value)
+    if (!date) return value
     return new Intl.DateTimeFormat('id-ID', {
       weekday: 'short',
       day: '2-digit',
       month: 'short',
+      year: 'numeric',
+    }).format(date)
+  }
+
+  function formatMonthLabel(date) {
+    return new Intl.DateTimeFormat('id-ID', {
+      month: 'long',
+      year: 'numeric',
     }).format(date)
   }
 
@@ -106,6 +143,12 @@
     const minutes = Math.floor(safeSeconds / 60)
     const remainder = safeSeconds % 60
     return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+  }
+
+  function getFocusMinutes() {
+    const parsed = Number.parseInt(focusMinutesInput.value || String(DEFAULT_FOCUS_MINUTES), 10)
+    if (!Number.isFinite(parsed)) return DEFAULT_FOCUS_MINUTES
+    return Math.min(720, Math.max(1, parsed))
   }
 
   function priorityRank(priority) {
@@ -147,7 +190,34 @@
           .filter((event) => event.title && event.date)
       : []
 
-    nextState.notes = typeof input.notes === 'string' ? input.notes : ''
+    nextState.noteDraft = {
+      title: String(input.noteDraft?.title || '').trim(),
+      body: typeof input.noteDraft?.body === 'string' ? input.noteDraft.body : '',
+    }
+
+    if (Array.isArray(input.notes)) {
+      nextState.notes = input.notes
+        .map((note) => ({
+          id: String(note.id || crypto.randomUUID()),
+          title: String(note.title || '').trim(),
+          body: String(note.body || '').trim(),
+          createdAt: String(note.createdAt || new Date().toISOString()),
+          updatedAt: String(note.updatedAt || note.createdAt || new Date().toISOString()),
+        }))
+        .filter((note) => note.title || note.body)
+        .slice(-80)
+    } else if (typeof input.notes === 'string' && input.notes.trim()) {
+      nextState.notes = [
+        {
+          id: crypto.randomUUID(),
+          title: 'Imported quick note',
+          body: input.notes.trim(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]
+    }
+
     nextState.focus = {
       totalSeconds: Number.isFinite(Number(input.focus?.totalSeconds)) ? Math.max(0, Number(input.focus.totalSeconds)) : 0,
       sessions: Array.isArray(input.focus?.sessions) ? input.focus.sessions.slice(-30) : [],
@@ -166,11 +236,29 @@
     }
   }
 
-  function saveState(message = '') {
+  function persistState() {
     state.updatedAt = new Date().toISOString()
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }
+
+  function saveState(message = '') {
+    persistState()
     if (message) setStatus(message, 'success')
     render()
+  }
+
+  function createPill(text, extraClass = '') {
+    const pill = document.createElement('span')
+    pill.className = `pill ${extraClass}`.trim()
+    pill.textContent = text
+    return pill
+  }
+
+  function getItemsForDate(value) {
+    return {
+      tasks: state.tasks.filter((task) => task.dueDate === value),
+      events: state.events.filter((event) => event.date === value),
+    }
   }
 
   function renderMetrics() {
@@ -182,8 +270,78 @@
     metricFocusMinutes.textContent = String(Math.floor((state.focus.totalSeconds || 0) / 60))
   }
 
+  function renderCalendarWeekdays() {
+    if (calendarWeekdays.childElementCount) return
+    for (const label of ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']) {
+      const item = document.createElement('div')
+      item.className = 'calendar-weekday'
+      item.textContent = label
+      calendarWeekdays.appendChild(item)
+    }
+  }
+
+  function renderCalendar() {
+    renderCalendarWeekdays()
+    calendarGrid.innerHTML = ''
+    const monthStart = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth(), 1)
+    const gridStart = new Date(monthStart)
+    gridStart.setDate(monthStart.getDate() - monthStart.getDay())
+    calendarMonthLabel.textContent = formatMonthLabel(monthStart)
+
+    for (let index = 0; index < 42; index += 1) {
+      const currentDate = new Date(gridStart)
+      currentDate.setDate(gridStart.getDate() + index)
+      const currentKey = dateKey(currentDate)
+      const { tasks, events } = getItemsForDate(currentKey)
+      const visibleItems = [
+        ...tasks.slice(0, 2).map((task) => ({ type: 'task', label: task.title })),
+        ...events.slice(0, 2).map((event) => ({ type: 'event', label: event.time ? `${event.time} ${event.title}` : event.title })),
+      ].slice(0, 3)
+      const hiddenCount = tasks.length + events.length - visibleItems.length
+
+      const button = document.createElement('button')
+      button.className = 'calendar-day'
+      button.type = 'button'
+      button.setAttribute('aria-label', `${formatDateLabel(currentKey)}, ${tasks.length} task, ${events.length} jadwal`)
+      if (currentDate.getMonth() !== monthStart.getMonth()) button.classList.add('is-muted')
+      if (currentKey === todayKey()) button.classList.add('is-today')
+      if (currentKey === selectedDate) button.classList.add('is-selected')
+
+      const dateNumber = document.createElement('span')
+      dateNumber.className = 'calendar-date'
+      dateNumber.textContent = String(currentDate.getDate())
+
+      const itemWrap = document.createElement('span')
+      itemWrap.className = 'calendar-items'
+
+      visibleItems.forEach((item) => {
+        const chip = document.createElement('span')
+        chip.className = `calendar-chip ${item.type}`
+        chip.textContent = item.label
+        itemWrap.appendChild(chip)
+      })
+
+      if (hiddenCount > 0) {
+        const more = document.createElement('span')
+        more.className = 'calendar-more'
+        more.textContent = `+${hiddenCount} lagi`
+        itemWrap.appendChild(more)
+      }
+
+      button.append(dateNumber, itemWrap)
+      button.addEventListener('click', () => {
+        selectedDate = currentKey
+        calendarViewDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+        syncSelectedDateInputs()
+        render()
+      })
+      calendarGrid.appendChild(button)
+    }
+  }
+
   function renderTasks() {
     taskList.innerHTML = ''
+    selectedTaskDate.textContent = `Task untuk ${formatDateLabel(selectedDate)}.`
 
     taskFilterButtons.forEach((button) => {
       const isActive = button.dataset.taskFilter === activeTaskFilter
@@ -192,6 +350,7 @@
     })
 
     const filteredTasks = state.tasks
+      .filter((task) => task.dueDate === selectedDate)
       .filter((task) => {
         if (activeTaskFilter === 'done') return task.done
         if (activeTaskFilter === 'open') return !task.done
@@ -199,15 +358,13 @@
       })
       .sort((first, second) => {
         if (first.done !== second.done) return first.done ? 1 : -1
-        const priorityDiff = priorityRank(first.priority) - priorityRank(second.priority)
-        if (priorityDiff !== 0) return priorityDiff
-        return String(first.dueDate || '9999-12-31').localeCompare(String(second.dueDate || '9999-12-31'))
+        return priorityRank(first.priority) - priorityRank(second.priority)
       })
 
     if (!filteredTasks.length) {
       const emptyItem = document.createElement('li')
       emptyItem.className = 'empty-state'
-      emptyItem.textContent = activeTaskFilter === 'done' ? 'Belum ada task selesai.' : 'Belum ada task. Tambahkan satu hal kecil dulu.'
+      emptyItem.textContent = 'Belum ada task untuk tanggal ini.'
       taskList.appendChild(emptyItem)
       return
     }
@@ -225,11 +382,7 @@
 
       const meta = document.createElement('div')
       meta.className = 'item-meta'
-      meta.append(
-        createPill(task.priority, `priority-${task.priority}`),
-        createPill(formatDateLabel(task.dueDate)),
-        createPill(task.category || 'General'),
-      )
+      meta.append(createPill(task.priority, `priority-${task.priority}`), createPill(task.category || 'General'))
       if (task.estimate) meta.append(createPill(`${task.estimate} min`))
 
       const actions = document.createElement('div')
@@ -270,30 +423,22 @@
     }
   }
 
-  function createPill(text, extraClass = '') {
-    const pill = document.createElement('span')
-    pill.className = `pill ${extraClass}`.trim()
-    pill.textContent = text
-    return pill
-  }
-
   function renderSchedule() {
     scheduleList.innerHTML = ''
-    const sortedEvents = [...state.events].sort((first, second) => {
-      const firstValue = `${first.date} ${first.time || '99:99'}`
-      const secondValue = `${second.date} ${second.time || '99:99'}`
-      return firstValue.localeCompare(secondValue)
-    })
+    selectedScheduleDate.textContent = `Jadwal untuk ${formatDateLabel(selectedDate)}.`
+    const sortedEvents = state.events
+      .filter((event) => event.date === selectedDate)
+      .sort((first, second) => String(first.time || '99:99').localeCompare(String(second.time || '99:99')))
 
     if (!sortedEvents.length) {
       const emptyItem = document.createElement('li')
       emptyItem.className = 'empty-state'
-      emptyItem.textContent = 'Belum ada jadwal. Tambahkan agenda penting berikutnya.'
+      emptyItem.textContent = 'Belum ada jadwal untuk tanggal ini.'
       scheduleList.appendChild(emptyItem)
       return
     }
 
-    for (const event of sortedEvents.slice(0, 12)) {
+    for (const event of sortedEvents) {
       const item = document.createElement('li')
       item.className = 'item'
 
@@ -306,7 +451,7 @@
 
       const meta = document.createElement('div')
       meta.className = 'item-meta'
-      meta.append(createPill(formatDateLabel(event.date)), createPill(event.time || 'No time'), createPill(event.category || 'General'))
+      meta.append(createPill(event.time || 'No time'), createPill(event.category || 'General'))
 
       const actions = document.createElement('div')
       actions.className = 'item-actions'
@@ -327,18 +472,75 @@
     }
   }
 
-  function renderNotesMeta() {
+  function renderNotes() {
+    noteList.innerHTML = ''
     if (!state.updatedAt) {
       notesSavedAt.textContent = 'Not saved yet'
+    } else {
+      notesSavedAt.textContent = `Saved ${new Intl.DateTimeFormat('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: 'short',
+      }).format(new Date(state.updatedAt))}`
+    }
+
+    const notes = [...state.notes].sort((first, second) => String(second.updatedAt).localeCompare(String(first.updatedAt)))
+    if (!notes.length) {
+      const emptyItem = document.createElement('li')
+      emptyItem.className = 'empty-state'
+      emptyItem.textContent = 'Belum ada catatan tersimpan.'
+      noteList.appendChild(emptyItem)
       return
     }
 
-    notesSavedAt.textContent = `Saved ${new Intl.DateTimeFormat('id-ID', {
-      hour: '2-digit',
-      minute: '2-digit',
-      day: '2-digit',
-      month: 'short',
-    }).format(new Date(state.updatedAt))}`
+    for (const note of notes) {
+      const item = document.createElement('li')
+      item.className = 'item'
+
+      const main = document.createElement('div')
+      main.className = 'item-main'
+
+      const title = document.createElement('div')
+      title.className = 'item-title'
+      title.textContent = note.title || 'Untitled note'
+
+      const bodyText = document.createElement('p')
+      bodyText.className = 'note-body muted'
+      bodyText.textContent = note.body
+
+      const meta = document.createElement('div')
+      meta.className = 'item-meta'
+      meta.append(createPill(formatDateLabel(String(note.updatedAt).slice(0, 10))))
+
+      const actions = document.createElement('div')
+      actions.className = 'item-actions'
+
+      const editButton = document.createElement('button')
+      editButton.className = 'button small'
+      editButton.type = 'button'
+      editButton.textContent = 'Edit'
+      editButton.addEventListener('click', () => {
+        noteTitle.value = note.title
+        quickNote.value = note.body
+        state.notes = state.notes.filter((itemNote) => itemNote.id !== note.id)
+        saveState('Note loaded for editing.')
+      })
+
+      const deleteButton = document.createElement('button')
+      deleteButton.className = 'button small danger'
+      deleteButton.type = 'button'
+      deleteButton.textContent = 'Delete'
+      deleteButton.addEventListener('click', () => {
+        state.notes = state.notes.filter((itemNote) => itemNote.id !== note.id)
+        saveState('Note deleted.')
+      })
+
+      main.append(title, bodyText, meta)
+      actions.append(editButton, deleteButton)
+      item.append(main, actions)
+      noteList.appendChild(item)
+    }
   }
 
   function renderFocus() {
@@ -349,10 +551,16 @@
 
   function render() {
     renderMetrics()
+    renderCalendar()
     renderTasks()
     renderSchedule()
-    renderNotesMeta()
+    renderNotes()
     renderFocus()
+  }
+
+  function syncSelectedDateInputs() {
+    taskFields.dueDate.value = selectedDate
+    eventFields.date.value = selectedDate
   }
 
   function handleTaskSubmit(event) {
@@ -365,7 +573,7 @@
       title,
       category: taskFields.category.value.trim(),
       priority: taskFields.priority.value,
-      dueDate: taskFields.dueDate.value,
+      dueDate: taskFields.dueDate.value || selectedDate,
       estimate: Number.parseInt(taskFields.estimate.value || '0', 10) || 0,
       done: false,
       createdAt: new Date().toISOString(),
@@ -374,13 +582,14 @@
 
     taskForm.reset()
     taskFields.priority.value = 'medium'
+    syncSelectedDateInputs()
     saveState('Task added.')
   }
 
   function handleScheduleSubmit(event) {
     event.preventDefault()
     const title = eventFields.title.value.trim()
-    const date = eventFields.date.value
+    const date = eventFields.date.value || selectedDate
     if (!title || !date) return
 
     state.events.push({
@@ -393,22 +602,47 @@
     })
 
     scheduleForm.reset()
-    eventFields.date.value = todayKey()
+    syncSelectedDateInputs()
     saveState('Schedule added.')
   }
 
-  function saveNotesSoon() {
-    window.clearTimeout(noteSaveTimer)
-    noteSaveTimer = window.setTimeout(() => {
-      state.notes = quickNote.value
-      saveState('Notes saved.')
-    }, 500)
+  function saveNoteDraft() {
+    state.noteDraft = {
+      title: noteTitle.value.trim(),
+      body: quickNote.value,
+    }
+    persistState()
+    renderNotes()
+  }
+
+  function handleNoteSubmit(event) {
+    event.preventDefault()
+    const title = noteTitle.value.trim()
+    const bodyText = quickNote.value.trim()
+    if (!title && !bodyText) {
+      setStatus('Write a note before saving.', 'info')
+      return
+    }
+
+    state.notes.push({
+      id: crypto.randomUUID(),
+      title: title || 'Untitled note',
+      body: bodyText,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    })
+    noteTitle.value = ''
+    quickNote.value = ''
+    state.noteDraft = { title: '', body: '' }
+    saveState('Note saved.')
   }
 
   function resetFocusTimer() {
     focusIsRunning = false
     window.clearInterval(focusTimer)
-    focusRemainingSeconds = (Number.parseInt(focusMinutesSelect.value || String(DEFAULT_FOCUS_MINUTES), 10) || DEFAULT_FOCUS_MINUTES) * 60
+    const minutes = getFocusMinutes()
+    focusMinutesInput.value = String(minutes)
+    focusRemainingSeconds = minutes * 60
     focusStartedAt = 0
     renderFocus()
   }
@@ -416,7 +650,7 @@
   function completeFocusSession() {
     focusIsRunning = false
     window.clearInterval(focusTimer)
-    const plannedSeconds = (Number.parseInt(focusMinutesSelect.value || String(DEFAULT_FOCUS_MINUTES), 10) || DEFAULT_FOCUS_MINUTES) * 60
+    const plannedSeconds = getFocusMinutes() * 60
     state.focus.totalSeconds += plannedSeconds
     state.focus.sessions.push({
       id: crypto.randomUUID(),
@@ -431,6 +665,7 @@
 
   function startFocusTimer() {
     if (focusIsRunning) return
+    if (focusRemainingSeconds <= 0) resetFocusTimer()
     focusIsRunning = true
     focusStartedAt = Date.now()
     focusTimer = window.setInterval(() => {
@@ -455,6 +690,7 @@
   }
 
   function exportData() {
+    saveNoteDraft()
     const payload = JSON.stringify(state, null, 2)
     const blob = new Blob([payload], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -472,9 +708,9 @@
     if (!file) return
     try {
       const text = await file.text()
-      const importedState = normalizeState(JSON.parse(text))
-      state = importedState
-      quickNote.value = state.notes
+      state = normalizeState(JSON.parse(text))
+      noteTitle.value = state.noteDraft.title
+      quickNote.value = state.noteDraft.body
       saveState('Dashboard data imported.')
     } catch {
       setStatus('Import failed. Please choose a valid dashboard JSON file.', 'error')
@@ -486,7 +722,15 @@
   function wireEvents() {
     taskForm.addEventListener('submit', handleTaskSubmit)
     scheduleForm.addEventListener('submit', handleScheduleSubmit)
-    quickNote.addEventListener('input', saveNotesSoon)
+    noteForm.addEventListener('submit', handleNoteSubmit)
+    noteTitle.addEventListener('input', saveNoteDraft)
+    quickNote.addEventListener('input', saveNoteDraft)
+    clearNoteButton.addEventListener('click', () => {
+      noteTitle.value = ''
+      quickNote.value = ''
+      state.noteDraft = { title: '', body: '' }
+      saveState('Note draft cleared.')
+    })
     clearDoneButton.addEventListener('click', () => {
       state.tasks = state.tasks.filter((task) => !task.done)
       saveState('Completed tasks cleared.')
@@ -499,7 +743,22 @@
       })
     })
 
-    focusMinutesSelect.addEventListener('change', resetFocusTimer)
+    calendarPrevButton.addEventListener('click', () => {
+      calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1)
+      renderCalendar()
+    })
+    calendarNextButton.addEventListener('click', () => {
+      calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() + 1, 1)
+      renderCalendar()
+    })
+    calendarTodayButton.addEventListener('click', () => {
+      selectedDate = todayKey()
+      calendarViewDate = new Date(`${selectedDate}T00:00:00`)
+      syncSelectedDateInputs()
+      render()
+    })
+
+    focusMinutesInput.addEventListener('change', resetFocusTimer)
     focusStartButton.addEventListener('click', startFocusTimer)
     focusPauseButton.addEventListener('click', pauseFocusTimer)
     focusResetButton.addEventListener('click', () => {
@@ -549,8 +808,9 @@
     setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
 
     loadState()
-    quickNote.value = state.notes
-    eventFields.date.value = todayKey()
+    noteTitle.value = state.noteDraft.title
+    quickNote.value = state.noteDraft.body
+    syncSelectedDateInputs()
     resetFocusTimer()
     wireEvents()
     render()

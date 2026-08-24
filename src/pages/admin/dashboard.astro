@@ -259,6 +259,112 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         gap: 1rem;
       }
 
+      .calendar-panel {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .calendar-head {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      .calendar-title {
+        font-size: clamp(1.25rem, 2.6vw, 1.7rem);
+        font-weight: 900;
+      }
+
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: 0.35rem;
+      }
+
+      .calendar-weekday {
+        color: color-mix(in oklab, var(--text-color) 68%, transparent);
+        font-weight: 800;
+        font-size: 0.78rem;
+        text-align: center;
+      }
+
+      .calendar-day {
+        display: grid;
+        align-content: start;
+        gap: 0.35rem;
+        transition:
+          transform 140ms ease,
+          border-color 160ms ease,
+          background-color 160ms ease;
+        cursor: pointer;
+        border: 1px solid var(--border-soft);
+        border-radius: 14px;
+        background: color-mix(in oklab, var(--surface-soft) 76%, transparent);
+        padding: 0.48rem;
+        min-block-size: clamp(5.8rem, 11vw, 7.4rem);
+        color: inherit;
+        font: inherit;
+        text-align: start;
+      }
+
+      .calendar-day:hover,
+      .calendar-day:focus-visible {
+        transform: translateY(-1px);
+        border-color: color-mix(in oklab, var(--brand-primary) 42%, var(--border-soft));
+        background: color-mix(in oklab, var(--surface-soft) 64%, var(--brand-primary) 12%);
+      }
+
+      .calendar-day.is-muted {
+        opacity: 0.48;
+      }
+
+      .calendar-day.is-today {
+        border-color: color-mix(in oklab, var(--brand-secondary) 54%, var(--border-soft));
+      }
+
+      .calendar-day.is-selected {
+        box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--brand-outline) 44%, transparent);
+        border-color: color-mix(in oklab, var(--brand-outline) 52%, var(--border-soft));
+      }
+
+      .calendar-date {
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      .calendar-items {
+        display: grid;
+        gap: 0.22rem;
+      }
+
+      .calendar-chip {
+        display: block;
+        border-radius: 999px;
+        padding: 0.08rem 0.38rem;
+        max-inline-size: 100%;
+        overflow: hidden;
+        font-size: clamp(0.68rem, 1.5vw, 0.78rem);
+        line-height: 1.35;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .calendar-chip.task {
+        background: color-mix(in oklab, var(--brand-primary) 22%, var(--surface-soft));
+      }
+
+      .calendar-chip.event {
+        background: color-mix(in oklab, var(--brand-secondary) 22%, var(--surface-soft));
+      }
+
+      .calendar-more {
+        color: color-mix(in oklab, var(--text-color) 70%, transparent);
+        font-size: 0.72rem;
+        font-weight: 700;
+      }
+
       .panel-card {
         padding: clamp(1rem, 2.4vw, 1.35rem);
       }
@@ -431,6 +537,10 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         min-height: 220px;
       }
 
+      .note-body {
+        white-space: pre-wrap;
+      }
+
       .sr-only {
         position: absolute;
         margin: -1px;
@@ -482,6 +592,22 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
           align-items: stretch;
         }
       }
+
+      @media (max-width: 560px) {
+        .calendar-grid {
+          gap: 0.22rem;
+        }
+
+        .calendar-day {
+          border-radius: 10px;
+          padding: 0.38rem;
+          min-block-size: 4.7rem;
+        }
+
+        .calendar-chip {
+          padding-inline: 0.28rem;
+        }
+      }
     </style>
   </head>
   <body
@@ -531,6 +657,23 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         </section>
 
         <div class="dashboard-grid">
+          <section class="panel panel-card wide-panel calendar-panel" aria-labelledby="calendar-title">
+            <div class="calendar-head">
+              <div>
+                <h2 id="calendar-title">Kalender Produktivitas</h2>
+                <p class="muted">Task dan jadwal muncul di tanggal masing-masing. Pilih tanggal untuk melihat detail.</p>
+              </div>
+              <div class="toolbar">
+                <button class="button small" id="calendar-prev-button" type="button">Prev</button>
+                <p class="calendar-title" id="calendar-month-label" aria-live="polite">Month</p>
+                <button class="button small" id="calendar-next-button" type="button">Next</button>
+                <button class="button small" id="calendar-today-button" type="button">Today</button>
+              </div>
+            </div>
+            <div class="calendar-grid" id="calendar-weekdays" aria-hidden="true"></div>
+            <div class="calendar-grid" id="calendar-grid"></div>
+          </section>
+
           <section class="panel panel-card" aria-labelledby="task-form-title">
             <div class="panel-head">
               <div>
@@ -578,8 +721,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
           <section class="panel panel-card" aria-labelledby="task-list-title">
             <div class="panel-head">
               <div>
-                <h2 id="task-list-title">Task Hari Ini</h2>
-                <p>Checklist kerja harian, urut dari prioritas dan deadline.</p>
+                <h2 id="task-list-title">Task Tanggal Dipilih</h2>
+                <p id="selected-task-date">Checklist kerja sesuai tanggal di kalender.</p>
               </div>
               <div class="toolbar">
                 <button class="button small" data-task-filter="all" type="button">All</button>
@@ -594,7 +737,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
             <div class="panel-head">
               <div>
                 <h2 id="schedule-title">Jadwal</h2>
-                <p>Agenda ringan untuk kuliah, organisasi, project, dan kegiatan pribadi.</p>
+                <p id="selected-schedule-date">Agenda sesuai tanggal di kalender.</p>
               </div>
             </div>
 
@@ -639,12 +782,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
               </div>
               <div class="field">
                 <label for="focus-minutes">Durasi</label>
-                <select id="focus-minutes">
-                  <option value="15">15 menit</option>
-                  <option value="25" selected>25 menit</option>
-                  <option value="45">45 menit</option>
-                  <option value="60">60 menit</option>
-                </select>
+                <input id="focus-minutes" type="number" min="1" max="720" step="1" value="25" />
+                <p class="muted">Isi bebas dalam menit, misalnya 7, 25, 90, atau 120.</p>
               </div>
               <div class="focus-time" id="focus-time" aria-live="polite">25:00</div>
               <div class="focus-actions">
@@ -663,10 +802,21 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
               </div>
               <p class="muted" id="notes-saved-at">Not saved yet</p>
             </div>
-            <div class="field">
-              <label for="quick-note">Catatan</label>
-              <textarea class="quick-note" id="quick-note" placeholder="Tulis ide atau catatan cepat di sini..."></textarea>
-            </div>
+            <form id="note-form" class="field-grid">
+              <div class="field">
+                <label for="note-title">Judul catatan</label>
+                <input id="note-title" type="text" placeholder="Contoh: ide konten blog" />
+              </div>
+              <div class="field">
+                <label for="quick-note">Catatan</label>
+                <textarea class="quick-note" id="quick-note" placeholder="Tulis ide atau catatan cepat di sini..."></textarea>
+              </div>
+              <div class="form-actions">
+                <button class="button primary" type="submit">Save note</button>
+                <button class="button" id="clear-note-button" type="button">Clear draft</button>
+              </div>
+            </form>
+            <ul class="item-list" id="note-list"></ul>
             <p class="helper">Data dashboard ini tersimpan lokal di browser. Gunakan export/import untuk backup.</p>
           </section>
         </div>
