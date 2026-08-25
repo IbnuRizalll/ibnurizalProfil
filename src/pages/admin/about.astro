@@ -269,7 +269,9 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .field-grid {
         display: grid;
+        align-items: start;
         gap: 0.8rem;
+        min-inline-size: 0;
       }
 
       .field-grid.two {
@@ -278,7 +280,9 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .field {
         display: grid;
+        align-content: start;
         gap: 0.35rem;
+        min-inline-size: 0;
       }
 
       .field label {
@@ -296,6 +300,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
         padding: 0.72rem 0.86rem;
         width: 100%;
+        min-inline-size: 0;
         color: inherit;
         font: inherit;
       }
@@ -303,6 +308,11 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       textarea {
         min-height: 132px;
         resize: vertical;
+      }
+
+      input[type='file'] {
+        block-size: auto;
+        min-block-size: 0;
       }
 
       .field-inline-meta {
