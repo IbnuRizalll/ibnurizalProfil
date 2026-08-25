@@ -101,6 +101,7 @@ const projectStructuredData = isNotFound
 <DefaultLayout
   title={`${project.title} | Portfolio Ibnu Rizal Mutaqim`}
   description={project.description}
+  image={project.featuredImage}
   url={`/portfolio/${project.slug}`}
   noindex={isNotFound}
   structuredData={projectStructuredData ? [projectStructuredData] : []}
