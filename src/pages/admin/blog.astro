@@ -254,6 +254,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       .workspace {
         display: grid;
         gap: 1rem;
+        min-inline-size: 0;
       }
 
       .editor-panel,
@@ -263,6 +264,12 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .editor-panel {
         container-type: inline-size;
+      }
+
+      .list-panel {
+        container-name: admin-list;
+        container-type: inline-size;
+        min-inline-size: 0;
       }
 
       .panel-head {
@@ -374,6 +381,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       .search-wrap {
         position: relative;
         min-width: min(100%, 260px);
+        min-inline-size: 0;
       }
 
       .search-wrap input {
@@ -387,6 +395,26 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         pointer-events: none;
         content: '⌕';
         color: color-mix(in oklab, var(--text-color) 68%, transparent);
+      }
+
+      @container admin-list (max-width: 460px) {
+        .list-panel .panel-head {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .list-panel .toolbar {
+          inline-size: 100%;
+        }
+
+        .list-panel .search-wrap {
+          flex: 1 1 100%;
+          min-width: 0;
+        }
+
+        .list-panel .toolbar .button {
+          flex: 1 1 100%;
+        }
       }
 
       .metrics {
