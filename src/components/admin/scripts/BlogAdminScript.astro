@@ -961,7 +961,13 @@
     slugPreview.textContent = `/blog/${slug}`
   }
 
+  function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }
+
   function updateCounters() {
+    autoResizeTextarea(fields.description)
     const descriptionLength = fields.description.value.trim().length
     descriptionCount.textContent = `${descriptionLength} chars`
     blockCount.textContent = `${contentBlocks.length} blocks`
@@ -1041,10 +1047,14 @@
 
       if (block.type === 'paragraph') {
         const paragraphInput = document.createElement('textarea')
+        paragraphInput.className = 'long-text-editor'
+        paragraphInput.rows = 10
+        paragraphInput.setAttribute('aria-label', `Isi paragraf blok ${index + 1}`)
         paragraphInput.placeholder = 'Tulis paragraf artikel...'
         paragraphInput.value = block.text || ''
         paragraphInput.addEventListener('input', () => {
           block.text = paragraphInput.value
+          autoResizeTextarea(paragraphInput)
         })
         blockBody.append(paragraphInput)
       }
@@ -1153,6 +1163,8 @@
         })
 
         const rowsInput = document.createElement('textarea')
+        rowsInput.rows = 8
+        rowsInput.setAttribute('aria-label', `Baris tabel blok ${index + 1}`)
         rowsInput.placeholder = 'Baris 1 kolom 1 | Baris 1 kolom 2\nBaris 2 kolom 1 | Baris 2 kolom 2'
         rowsInput.value = serializeRowsToPipeText(block.rows)
         rowsInput.addEventListener('input', () => {
@@ -1160,6 +1172,7 @@
             .split('\n')
             .map((line) => parsePipeRow(line))
             .filter((row) => row.length > 0)
+          autoResizeTextarea(rowsInput)
         })
 
         const importWrap = document.createElement('div')
@@ -1202,6 +1215,7 @@
 
       item.append(blockBody)
       contentBlockList.append(item)
+      item.querySelectorAll('textarea').forEach(autoResizeTextarea)
     })
 
     updateCounters()

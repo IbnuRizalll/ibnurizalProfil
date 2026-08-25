@@ -261,6 +261,10 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         padding: clamp(1rem, 2.4vw, 1.35rem);
       }
 
+      .editor-panel {
+        container-type: inline-size;
+      }
+
       .panel-head {
         display: flex;
         justify-content: space-between;
@@ -283,15 +287,17 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       .field-grid {
         display: grid;
         gap: 0.8rem;
+        min-inline-size: 0;
       }
 
       .field-grid.two {
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        grid-template-columns: minmax(0, 1fr);
       }
 
       .field {
         display: grid;
         gap: 0.35rem;
+        min-inline-size: 0;
       }
 
       .field label {
@@ -314,8 +320,23 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       }
 
       textarea {
-        min-height: 132px;
+        min-height: 12rem;
         resize: vertical;
+        line-height: 1.6;
+      }
+
+      .long-text-editor {
+        min-height: clamp(16rem, 40vh, 30rem);
+      }
+
+      .block-body textarea {
+        min-height: 14rem;
+      }
+
+      @container (min-width: 680px) {
+        .field-grid.two {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
 
       input[type='file'] {
@@ -533,13 +554,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         }
 
         .workspace {
-          grid-template-columns: minmax(320px, 0.9fr) minmax(430px, 1.15fr);
+          grid-template-columns: minmax(540px, 1.2fr) minmax(360px, 0.8fr);
           align-items: start;
-        }
-
-        .editor-panel {
-          position: sticky;
-          inset-block-start: 1rem;
         }
       }
     </style>
@@ -608,7 +624,12 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
             <div class="field">
               <label for="description">Description</label>
-              <textarea id="description" required></textarea>
+              <textarea
+                id="description"
+                class="long-text-editor"
+                rows="10"
+                aria-describedby="description-count"
+                required></textarea>
               <div class="field-inline-meta">
                 <span>Ringkasan project.</span><span id="description-count">0 chars</span>
               </div>
