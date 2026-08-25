@@ -322,6 +322,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
         background: color-mix(in oklab, var(--surface-soft) 82%, transparent);
         padding: 0.72rem 0.86rem;
         width: 100%;
+        min-inline-size: 0;
         color: inherit;
         font: inherit;
       }
@@ -338,12 +339,6 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
 
       .block-body textarea {
         min-height: 14rem;
-      }
-
-      @container (min-width: 680px) {
-        .field-grid.two {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
       }
 
       input[type='file'] {
