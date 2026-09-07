@@ -4,7 +4,6 @@
   const body = document.body
   const ADMIN_ACCESS_COOKIE_NAME = 'admin_access'
   const STORAGE_KEY = 'productivity-dashboard:v1'
-  const DEFAULT_FOCUS_MINUTES = 25
 
   const statusEl = document.getElementById('status')
   const appSection = document.getElementById('app-section')
@@ -12,44 +11,16 @@
   const exportButton = document.getElementById('export-button')
   const importButton = document.getElementById('import-button')
   const importInput = document.getElementById('import-input')
-  const taskForm = document.getElementById('task-form')
   const scheduleForm = document.getElementById('schedule-form')
-  const noteForm = document.getElementById('note-form')
-  const taskList = document.getElementById('task-list')
   const scheduleList = document.getElementById('schedule-list')
-  const noteList = document.getElementById('note-list')
-  const clearDoneButton = document.getElementById('clear-done-button')
-  const clearNoteButton = document.getElementById('clear-note-button')
-  const noteTitle = document.getElementById('note-title')
-  const quickNote = document.getElementById('quick-note')
-  const notesSavedAt = document.getElementById('notes-saved-at')
   const calendarGrid = document.getElementById('calendar-grid')
   const calendarWeekdays = document.getElementById('calendar-weekdays')
   const calendarMonthLabel = document.getElementById('calendar-month-label')
   const calendarPrevButton = document.getElementById('calendar-prev-button')
   const calendarNextButton = document.getElementById('calendar-next-button')
   const calendarTodayButton = document.getElementById('calendar-today-button')
-  const selectedTaskDate = document.getElementById('selected-task-date')
   const selectedScheduleDate = document.getElementById('selected-schedule-date')
-  const focusTaskInput = document.getElementById('focus-task')
-  const focusMinutesInput = document.getElementById('focus-minutes')
-  const focusTime = document.getElementById('focus-time')
-  const focusStartButton = document.getElementById('focus-start-button')
-  const focusPauseButton = document.getElementById('focus-pause-button')
-  const focusResetButton = document.getElementById('focus-reset-button')
-  const metricOpenTasks = document.getElementById('metric-open-tasks')
-  const metricDueToday = document.getElementById('metric-due-today')
   const metricEventsToday = document.getElementById('metric-events-today')
-  const metricFocusMinutes = document.getElementById('metric-focus-minutes')
-  const taskFilterButtons = [...document.querySelectorAll('[data-task-filter]')]
-
-  const taskFields = {
-    title: document.getElementById('task-title'),
-    category: document.getElementById('task-category'),
-    priority: document.getElementById('task-priority'),
-    dueDate: document.getElementById('task-due-date'),
-    estimate: document.getElementById('task-estimate'),
-  }
 
   const eventFields = {
     title: document.getElementById('event-title'),
@@ -62,25 +33,10 @@
   let state = createEmptyState()
   let selectedDate = todayKey()
   let calendarViewDate = new Date(`${todayKey()}T00:00:00`)
-  let activeTaskFilter = 'open'
-  let focusTimer = 0
-  let focusRemainingSeconds = DEFAULT_FOCUS_MINUTES * 60
-  let focusIsRunning = false
-  let focusStartedAt = 0
 
   function createEmptyState() {
     return {
-      tasks: [],
       events: [],
-      noteDraft: {
-        title: '',
-        body: '',
-      },
-      notes: [],
-      focus: {
-        totalSeconds: 0,
-        sessions: [],
-      },
       updatedAt: '',
     }
   }
@@ -138,44 +94,9 @@
     }).format(date)
   }
 
-  function formatTime(seconds) {
-    const safeSeconds = Math.max(0, seconds)
-    const minutes = Math.floor(safeSeconds / 60)
-    const remainder = safeSeconds % 60
-    return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
-  }
-
-  function getFocusMinutes() {
-    const parsed = Number.parseInt(focusMinutesInput.value || String(DEFAULT_FOCUS_MINUTES), 10)
-    if (!Number.isFinite(parsed)) return DEFAULT_FOCUS_MINUTES
-    return Math.min(720, Math.max(1, parsed))
-  }
-
-  function priorityRank(priority) {
-    if (priority === 'high') return 0
-    if (priority === 'medium') return 1
-    return 2
-  }
-
   function normalizeState(input) {
     const nextState = createEmptyState()
     if (!input || typeof input !== 'object') return nextState
-
-    nextState.tasks = Array.isArray(input.tasks)
-      ? input.tasks
-          .map((task) => ({
-            id: String(task.id || crypto.randomUUID()),
-            title: String(task.title || '').trim(),
-            category: String(task.category || '').trim(),
-            priority: ['high', 'medium', 'low'].includes(task.priority) ? task.priority : 'medium',
-            dueDate: String(task.dueDate || '').slice(0, 10),
-            estimate: Number.isFinite(Number(task.estimate)) ? Math.max(0, Number(task.estimate)) : 0,
-            done: Boolean(task.done),
-            createdAt: String(task.createdAt || new Date().toISOString()),
-            completedAt: task.completedAt ? String(task.completedAt) : '',
-          }))
-          .filter((task) => task.title)
-      : []
 
     nextState.events = Array.isArray(input.events)
       ? input.events
@@ -190,38 +111,6 @@
           .filter((event) => event.title && event.date)
       : []
 
-    nextState.noteDraft = {
-      title: String(input.noteDraft?.title || '').trim(),
-      body: typeof input.noteDraft?.body === 'string' ? input.noteDraft.body : '',
-    }
-
-    if (Array.isArray(input.notes)) {
-      nextState.notes = input.notes
-        .map((note) => ({
-          id: String(note.id || crypto.randomUUID()),
-          title: String(note.title || '').trim(),
-          body: String(note.body || '').trim(),
-          createdAt: String(note.createdAt || new Date().toISOString()),
-          updatedAt: String(note.updatedAt || note.createdAt || new Date().toISOString()),
-        }))
-        .filter((note) => note.title || note.body)
-        .slice(-80)
-    } else if (typeof input.notes === 'string' && input.notes.trim()) {
-      nextState.notes = [
-        {
-          id: crypto.randomUUID(),
-          title: 'Imported quick note',
-          body: input.notes.trim(),
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]
-    }
-
-    nextState.focus = {
-      totalSeconds: Number.isFinite(Number(input.focus?.totalSeconds)) ? Math.max(0, Number(input.focus.totalSeconds)) : 0,
-      sessions: Array.isArray(input.focus?.sessions) ? input.focus.sessions.slice(-30) : [],
-    }
     nextState.updatedAt = String(input.updatedAt || '')
     return nextState
   }
@@ -256,18 +145,13 @@
 
   function getItemsForDate(value) {
     return {
-      tasks: state.tasks.filter((task) => task.dueDate === value),
       events: state.events.filter((event) => event.date === value),
     }
   }
 
   function renderMetrics() {
     const today = todayKey()
-    const openTasks = state.tasks.filter((task) => !task.done)
-    metricOpenTasks.textContent = String(openTasks.length)
-    metricDueToday.textContent = String(openTasks.filter((task) => task.dueDate === today).length)
     metricEventsToday.textContent = String(state.events.filter((event) => event.date === today).length)
-    metricFocusMinutes.textContent = String(Math.floor((state.focus.totalSeconds || 0) / 60))
   }
 
   function renderCalendarWeekdays() {
@@ -292,17 +176,16 @@
       const currentDate = new Date(gridStart)
       currentDate.setDate(gridStart.getDate() + index)
       const currentKey = dateKey(currentDate)
-      const { tasks, events } = getItemsForDate(currentKey)
+      const { events } = getItemsForDate(currentKey)
       const visibleItems = [
-        ...tasks.slice(0, 2).map((task) => ({ type: 'task', label: task.title })),
-        ...events.slice(0, 2).map((event) => ({ type: 'event', label: event.time ? `${event.time} ${event.title}` : event.title })),
+        ...events.slice(0, 3).map((event) => ({ type: 'event', label: event.time ? `${event.time} ${event.title}` : event.title })),
       ].slice(0, 3)
-      const hiddenCount = tasks.length + events.length - visibleItems.length
+      const hiddenCount = events.length - visibleItems.length
 
       const button = document.createElement('button')
       button.className = 'calendar-day'
       button.type = 'button'
-      button.setAttribute('aria-label', `${formatDateLabel(currentKey)}, ${tasks.length} task, ${events.length} jadwal`)
+      button.setAttribute('aria-label', `${formatDateLabel(currentKey)}, ${events.length} jadwal`)
       if (currentDate.getMonth() !== monthStart.getMonth()) button.classList.add('is-muted')
       if (currentKey === todayKey()) button.classList.add('is-today')
       if (currentKey === selectedDate) button.classList.add('is-selected')
@@ -336,90 +219,6 @@
         render()
       })
       calendarGrid.appendChild(button)
-    }
-  }
-
-  function renderTasks() {
-    taskList.innerHTML = ''
-    selectedTaskDate.textContent = `Task untuk ${formatDateLabel(selectedDate)}.`
-
-    taskFilterButtons.forEach((button) => {
-      const isActive = button.dataset.taskFilter === activeTaskFilter
-      button.classList.toggle('primary', isActive)
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
-    })
-
-    const filteredTasks = state.tasks
-      .filter((task) => task.dueDate === selectedDate)
-      .filter((task) => {
-        if (activeTaskFilter === 'done') return task.done
-        if (activeTaskFilter === 'open') return !task.done
-        return true
-      })
-      .sort((first, second) => {
-        if (first.done !== second.done) return first.done ? 1 : -1
-        return priorityRank(first.priority) - priorityRank(second.priority)
-      })
-
-    if (!filteredTasks.length) {
-      const emptyItem = document.createElement('li')
-      emptyItem.className = 'empty-state'
-      emptyItem.textContent = 'Belum ada task untuk tanggal ini.'
-      taskList.appendChild(emptyItem)
-      return
-    }
-
-    for (const task of filteredTasks) {
-      const item = document.createElement('li')
-      item.className = `item ${task.done ? 'is-done' : ''}`
-
-      const main = document.createElement('div')
-      main.className = 'item-main'
-
-      const title = document.createElement('div')
-      title.className = 'item-title'
-      title.textContent = task.title
-
-      const meta = document.createElement('div')
-      meta.className = 'item-meta'
-      meta.append(createPill(task.priority, `priority-${task.priority}`), createPill(task.category || 'General'))
-      if (task.estimate) meta.append(createPill(`${task.estimate} min`))
-
-      const actions = document.createElement('div')
-      actions.className = 'item-actions'
-
-      const doneButton = document.createElement('button')
-      doneButton.className = 'button small'
-      doneButton.type = 'button'
-      doneButton.textContent = task.done ? 'Reopen' : 'Done'
-      doneButton.addEventListener('click', () => {
-        task.done = !task.done
-        task.completedAt = task.done ? new Date().toISOString() : ''
-        saveState(task.done ? 'Task marked done.' : 'Task reopened.')
-      })
-
-      const focusButton = document.createElement('button')
-      focusButton.className = 'button small'
-      focusButton.type = 'button'
-      focusButton.textContent = 'Focus'
-      focusButton.addEventListener('click', () => {
-        focusTaskInput.value = task.title
-        setStatus('Task moved to focus mode.', 'info')
-      })
-
-      const deleteButton = document.createElement('button')
-      deleteButton.className = 'button small danger'
-      deleteButton.type = 'button'
-      deleteButton.textContent = 'Delete'
-      deleteButton.addEventListener('click', () => {
-        state.tasks = state.tasks.filter((itemTask) => itemTask.id !== task.id)
-        saveState('Task deleted.')
-      })
-
-      main.append(title, meta)
-      actions.append(doneButton, focusButton, deleteButton)
-      item.append(main, actions)
-      taskList.appendChild(item)
     }
   }
 
@@ -472,118 +271,14 @@
     }
   }
 
-  function renderNotes() {
-    noteList.innerHTML = ''
-    if (!state.updatedAt) {
-      notesSavedAt.textContent = 'Not saved yet'
-    } else {
-      notesSavedAt.textContent = `Saved ${new Intl.DateTimeFormat('id-ID', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: 'short',
-      }).format(new Date(state.updatedAt))}`
-    }
-
-    const notes = [...state.notes].sort((first, second) => String(second.updatedAt).localeCompare(String(first.updatedAt)))
-    if (!notes.length) {
-      const emptyItem = document.createElement('li')
-      emptyItem.className = 'empty-state'
-      emptyItem.textContent = 'Belum ada catatan tersimpan.'
-      noteList.appendChild(emptyItem)
-      return
-    }
-
-    for (const note of notes) {
-      const item = document.createElement('li')
-      item.className = 'item'
-
-      const main = document.createElement('div')
-      main.className = 'item-main'
-
-      const title = document.createElement('div')
-      title.className = 'item-title'
-      title.textContent = note.title || 'Untitled note'
-
-      const bodyText = document.createElement('p')
-      bodyText.className = 'note-body muted'
-      bodyText.textContent = note.body
-
-      const meta = document.createElement('div')
-      meta.className = 'item-meta'
-      meta.append(createPill(formatDateLabel(String(note.updatedAt).slice(0, 10))))
-
-      const actions = document.createElement('div')
-      actions.className = 'item-actions'
-
-      const editButton = document.createElement('button')
-      editButton.className = 'button small'
-      editButton.type = 'button'
-      editButton.textContent = 'Edit'
-      editButton.addEventListener('click', () => {
-        noteTitle.value = note.title
-        quickNote.value = note.body
-        state.notes = state.notes.filter((itemNote) => itemNote.id !== note.id)
-        saveState('Note loaded for editing.')
-      })
-
-      const deleteButton = document.createElement('button')
-      deleteButton.className = 'button small danger'
-      deleteButton.type = 'button'
-      deleteButton.textContent = 'Delete'
-      deleteButton.addEventListener('click', () => {
-        state.notes = state.notes.filter((itemNote) => itemNote.id !== note.id)
-        saveState('Note deleted.')
-      })
-
-      main.append(title, bodyText, meta)
-      actions.append(editButton, deleteButton)
-      item.append(main, actions)
-      noteList.appendChild(item)
-    }
-  }
-
-  function renderFocus() {
-    focusTime.textContent = formatTime(focusRemainingSeconds)
-    focusStartButton.disabled = focusIsRunning
-    focusPauseButton.disabled = !focusIsRunning
-  }
-
   function render() {
     renderMetrics()
     renderCalendar()
-    renderTasks()
     renderSchedule()
-    renderNotes()
-    renderFocus()
   }
 
   function syncSelectedDateInputs() {
-    taskFields.dueDate.value = selectedDate
     eventFields.date.value = selectedDate
-  }
-
-  function handleTaskSubmit(event) {
-    event.preventDefault()
-    const title = taskFields.title.value.trim()
-    if (!title) return
-
-    state.tasks.push({
-      id: crypto.randomUUID(),
-      title,
-      category: taskFields.category.value.trim(),
-      priority: taskFields.priority.value,
-      dueDate: taskFields.dueDate.value || selectedDate,
-      estimate: Number.parseInt(taskFields.estimate.value || '0', 10) || 0,
-      done: false,
-      createdAt: new Date().toISOString(),
-      completedAt: '',
-    })
-
-    taskForm.reset()
-    taskFields.priority.value = 'medium'
-    syncSelectedDateInputs()
-    saveState('Task added.')
   }
 
   function handleScheduleSubmit(event) {
@@ -606,91 +301,7 @@
     saveState('Schedule added.')
   }
 
-  function saveNoteDraft() {
-    state.noteDraft = {
-      title: noteTitle.value.trim(),
-      body: quickNote.value,
-    }
-    persistState()
-    renderNotes()
-  }
-
-  function handleNoteSubmit(event) {
-    event.preventDefault()
-    const title = noteTitle.value.trim()
-    const bodyText = quickNote.value.trim()
-    if (!title && !bodyText) {
-      setStatus('Write a note before saving.', 'info')
-      return
-    }
-
-    state.notes.push({
-      id: crypto.randomUUID(),
-      title: title || 'Untitled note',
-      body: bodyText,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
-    noteTitle.value = ''
-    quickNote.value = ''
-    state.noteDraft = { title: '', body: '' }
-    saveState('Note saved.')
-  }
-
-  function resetFocusTimer() {
-    focusIsRunning = false
-    window.clearInterval(focusTimer)
-    const minutes = getFocusMinutes()
-    focusMinutesInput.value = String(minutes)
-    focusRemainingSeconds = minutes * 60
-    focusStartedAt = 0
-    renderFocus()
-  }
-
-  function completeFocusSession() {
-    focusIsRunning = false
-    window.clearInterval(focusTimer)
-    const plannedSeconds = getFocusMinutes() * 60
-    state.focus.totalSeconds += plannedSeconds
-    state.focus.sessions.push({
-      id: crypto.randomUUID(),
-      task: focusTaskInput.value.trim(),
-      seconds: plannedSeconds,
-      completedAt: new Date().toISOString(),
-    })
-    state.focus.sessions = state.focus.sessions.slice(-30)
-    saveState('Focus session completed.')
-    resetFocusTimer()
-  }
-
-  function startFocusTimer() {
-    if (focusIsRunning) return
-    if (focusRemainingSeconds <= 0) resetFocusTimer()
-    focusIsRunning = true
-    focusStartedAt = Date.now()
-    focusTimer = window.setInterval(() => {
-      focusRemainingSeconds -= 1
-      if (focusRemainingSeconds <= 0) {
-        completeFocusSession()
-        return
-      }
-      renderFocus()
-    }, 1000)
-    renderFocus()
-    setStatus('Focus session started.', 'info')
-  }
-
-  function pauseFocusTimer() {
-    if (!focusIsRunning) return
-    focusIsRunning = false
-    window.clearInterval(focusTimer)
-    const elapsedSeconds = Math.max(0, Math.round((Date.now() - focusStartedAt) / 1000))
-    setStatus(`Focus paused after ${Math.floor(elapsedSeconds / 60)} minutes.`, 'info')
-    renderFocus()
-  }
-
   function exportData() {
-    saveNoteDraft()
     const payload = JSON.stringify(state, null, 2)
     const blob = new Blob([payload], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -709,8 +320,6 @@
     try {
       const text = await file.text()
       state = normalizeState(JSON.parse(text))
-      noteTitle.value = state.noteDraft.title
-      quickNote.value = state.noteDraft.body
       saveState('Dashboard data imported.')
     } catch {
       setStatus('Import failed. Please choose a valid dashboard JSON file.', 'error')
@@ -720,28 +329,7 @@
   }
 
   function wireEvents() {
-    taskForm.addEventListener('submit', handleTaskSubmit)
     scheduleForm.addEventListener('submit', handleScheduleSubmit)
-    noteForm.addEventListener('submit', handleNoteSubmit)
-    noteTitle.addEventListener('input', saveNoteDraft)
-    quickNote.addEventListener('input', saveNoteDraft)
-    clearNoteButton.addEventListener('click', () => {
-      noteTitle.value = ''
-      quickNote.value = ''
-      state.noteDraft = { title: '', body: '' }
-      saveState('Note draft cleared.')
-    })
-    clearDoneButton.addEventListener('click', () => {
-      state.tasks = state.tasks.filter((task) => !task.done)
-      saveState('Completed tasks cleared.')
-    })
-
-    taskFilterButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        activeTaskFilter = button.dataset.taskFilter || 'open'
-        renderTasks()
-      })
-    })
 
     calendarPrevButton.addEventListener('click', () => {
       calendarViewDate = new Date(calendarViewDate.getFullYear(), calendarViewDate.getMonth() - 1, 1)
@@ -756,14 +344,6 @@
       calendarViewDate = new Date(`${selectedDate}T00:00:00`)
       syncSelectedDateInputs()
       render()
-    })
-
-    focusMinutesInput.addEventListener('change', resetFocusTimer)
-    focusStartButton.addEventListener('click', startFocusTimer)
-    focusPauseButton.addEventListener('click', pauseFocusTimer)
-    focusResetButton.addEventListener('click', () => {
-      resetFocusTimer()
-      setStatus('Focus timer reset.', 'info')
     })
 
     exportButton.addEventListener('click', exportData)
@@ -808,10 +388,7 @@
     setStatus(`Signed in as ${session.user.email ?? 'user'}.`, 'success')
 
     loadState()
-    noteTitle.value = state.noteDraft.title
-    quickNote.value = state.noteDraft.body
     syncSelectedDateInputs()
-    resetFocusTimer()
     wireEvents()
     render()
 

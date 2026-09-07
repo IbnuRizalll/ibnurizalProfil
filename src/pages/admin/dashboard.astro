@@ -17,7 +17,7 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
-    <title>Admin - Productivity Dashboard</title>
+    <title>Admin - Jadwal Saya</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <style
       is:global
@@ -620,8 +620,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       <header class="panel admin-header">
         <div>
           <p class="eyebrow">Ibnu Rizal Mutaqim CMS</p>
-          <h1>Productivity Dashboard</h1>
-          <p class="lead">Ruang kerja harian untuk task, jadwal, catatan cepat, dan sesi fokus.</p>
+          <h1>Jadwal Saya</h1>
+          <p class="lead">Ruang kerja untuk mengelola agenda dan jadwal harian.</p>
         </div>
         <div class="header-actions">
           <a class="link-chip" href="/">Preview website</a>
@@ -639,20 +639,8 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
       <section id="app-section" hidden>
         <section class="metrics" aria-live="polite">
           <article class="metric">
-            <p>Open tasks</p>
-            <strong id="metric-open-tasks">0</strong>
-          </article>
-          <article class="metric">
-            <p>Due today</p>
-            <strong id="metric-due-today">0</strong>
-          </article>
-          <article class="metric">
             <p>Events today</p>
             <strong id="metric-events-today">0</strong>
-          </article>
-          <article class="metric">
-            <p>Focus minutes</p>
-            <strong id="metric-focus-minutes">0</strong>
           </article>
         </section>
 
@@ -674,64 +662,6 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
             <div class="calendar-grid" id="calendar-grid"></div>
           </section>
 
-          <section class="panel panel-card" aria-labelledby="task-form-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="task-form-title">Tambah Task</h2>
-                <p>Masukkan hal yang perlu diselesaikan dan prioritasnya.</p>
-              </div>
-            </div>
-
-            <form id="task-form" class="field-grid">
-              <div class="field">
-                <label for="task-title">Task</label>
-                <input id="task-title" type="text" placeholder="Contoh: revisi portfolio section" required />
-              </div>
-              <div class="field-grid two">
-                <div class="field">
-                  <label for="task-category">Kategori</label>
-                  <input id="task-category" type="text" placeholder="kuliah, project, pribadi" />
-                </div>
-                <div class="field">
-                  <label for="task-priority">Prioritas</label>
-                  <select id="task-priority">
-                    <option value="high">High</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="low">Low</option>
-                  </select>
-                </div>
-              </div>
-              <div class="field-grid two">
-                <div class="field">
-                  <label for="task-due-date">Deadline</label>
-                  <input id="task-due-date" type="date" />
-                </div>
-                <div class="field">
-                  <label for="task-estimate">Estimasi menit</label>
-                  <input id="task-estimate" type="number" min="5" step="5" placeholder="30" />
-                </div>
-              </div>
-              <div class="form-actions">
-                <button class="button primary" type="submit">Add task</button>
-                <button class="button" id="clear-done-button" type="button">Clear done</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="panel panel-card" aria-labelledby="task-list-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="task-list-title">Task Tanggal Dipilih</h2>
-                <p id="selected-task-date">Checklist kerja sesuai tanggal di kalender.</p>
-              </div>
-              <div class="toolbar">
-                <button class="button small" data-task-filter="all" type="button">All</button>
-                <button class="button small" data-task-filter="open" type="button">Open</button>
-                <button class="button small" data-task-filter="done" type="button">Done</button>
-              </div>
-            </div>
-            <ul class="item-list" id="task-list"></ul>
-          </section>
 
           <section class="panel panel-card" aria-labelledby="schedule-title">
             <div class="panel-head">
@@ -768,57 +698,6 @@ const adminIdleTimeoutMinutes = Number.isFinite(rawAdminIdleTimeoutMinutes)
             <ul class="item-list" id="schedule-list"></ul>
           </section>
 
-          <section class="panel panel-card" aria-labelledby="focus-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="focus-title">Focus Mode</h2>
-                <p>Timer sederhana untuk mengunci satu pekerjaan.</p>
-              </div>
-            </div>
-            <div class="focus-panel">
-              <div class="field">
-                <label for="focus-task">Task aktif</label>
-                <input id="focus-task" type="text" placeholder="Apa yang sedang dikerjakan?" />
-              </div>
-              <div class="field">
-                <label for="focus-minutes">Durasi</label>
-                <input id="focus-minutes" type="number" min="1" max="720" step="1" value="25" />
-                <p class="muted">Isi bebas dalam menit, misalnya 7, 25, 90, atau 120.</p>
-              </div>
-              <div class="focus-time" id="focus-time" aria-live="polite">25:00</div>
-              <div class="focus-actions">
-                <button class="button primary" id="focus-start-button" type="button">Start</button>
-                <button class="button" id="focus-pause-button" type="button">Pause</button>
-                <button class="button" id="focus-reset-button" type="button">Reset</button>
-              </div>
-            </div>
-          </section>
-
-          <section class="panel panel-card wide-panel" aria-labelledby="notes-title">
-            <div class="panel-head">
-              <div>
-                <h2 id="notes-title">Quick Notes</h2>
-                <p>Tempat menaruh ide, catatan meeting, atau draft konten cepat.</p>
-              </div>
-              <p class="muted" id="notes-saved-at">Not saved yet</p>
-            </div>
-            <form id="note-form" class="field-grid">
-              <div class="field">
-                <label for="note-title">Judul catatan</label>
-                <input id="note-title" type="text" placeholder="Contoh: ide konten blog" />
-              </div>
-              <div class="field">
-                <label for="quick-note">Catatan</label>
-                <textarea class="quick-note" id="quick-note" placeholder="Tulis ide atau catatan cepat di sini..."></textarea>
-              </div>
-              <div class="form-actions">
-                <button class="button primary" type="submit">Save note</button>
-                <button class="button" id="clear-note-button" type="button">Clear draft</button>
-              </div>
-            </form>
-            <ul class="item-list" id="note-list"></ul>
-            <p class="helper">Data dashboard ini tersimpan lokal di browser. Gunakan export/import untuk backup.</p>
-          </section>
         </div>
       </section>
     </main>
